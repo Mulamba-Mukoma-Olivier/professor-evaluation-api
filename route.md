@@ -1,0 +1,21 @@
+# Routes de l'API
+
+- GET /health
+- POST /auth/register
+- POST /auth/login
+- GET /eligibility/:student_id
+- GET /professors
+- GET /professors/active
+- GET /professors/:id
+- POST /professors
+- GET /courses
+- GET /courses/:id
+- POST /courses
+- GET /criteria
+- GET /criteria/active
+- GET /criteria/:id
+- POST /criteria
+- GET /evaluations
+- GET /evaluations/:id
+- POST /evaluations/:student_id
+- GET /results/professors/:professor_id

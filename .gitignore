@@ -1,0 +1,134 @@
+# ==========================================
+# Go
+# ==========================================
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build output
+/bin/
+/build/
+/dist/
+
+# Go coverage
+coverage.out
+coverage.html
+*.coverprofile
+
+# Go workspace
+go.work
+go.work.sum
+
+# ==========================================
+# Environment variables / secrets
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+# ==========================================
+# Database
+# ==========================================
+
+# SQLite
+*.sqlite
+*.sqlite3
+*.db
+
+# PostgreSQL dumps
+*.sql
+*.dump
+*.backup
+
+# ==========================================
+# Logs
+# ==========================================
+
+*.log
+logs/
+
+# ==========================================
+# Frontend - Node / React / Vite
+# ==========================================
+
+node_modules/
+frontend/node_modules/
+
+# Vite
+frontend/dist/
+frontend/.vite/
+
+# Build outputs
+frontend/build/
+
+# Environment variables frontend
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# ==========================================
+# TypeScript
+# ==========================================
+
+*.tsbuildinfo
+
+# ==========================================
+# IDE / Editors
+# ==========================================
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# IntelliJ / GoLand
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# ==========================================
+# OS generated files
+# ==========================================
+
+.DS_Store
+Thumbs.db
+
+# Linux
+*~
+.directory
+
+# ==========================================
+# Temporary files
+# ==========================================
+
+*.tmp
+*.temp
+tmp/
+temp/
+
+# ==========================================
+# Test / generated files
+# ==========================================
+
+*.prof
+*.pprof
+
+# ==========================================
+# Local configuration
+# ==========================================
+
+config/local.*
+config/*.local.*

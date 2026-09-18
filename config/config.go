@@ -1,0 +1,197 @@
+package main
+
+import (
+	"log"
+	"os"
+	"time"
+
+	"github.com/joho/godotenv"
+
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/database"
+
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/auth"
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/courses"
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/criteria"
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/eligibility"
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/evaluations"
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/professors"
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/results"
+
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/routes"
+
+	appjwt "github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/jwt"
+)
+
+func main() {
+	// =========================================================
+	// 1. Charger les variables d'environnement
+	// =========================================================
+
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found")
+	}
+
+	// =========================================================
+	// 2. Configuration PostgreSQL
+	// =========================================================
+
+	dbConfig := database.Config{
+		Host:     getEnv("DB_HOST", "localhost"),
+		Port:     getEnv("DB_PORT", "5432"),
+		User:     getEnv("DB_USER", "postgres"),
+		Password: getEnv("DB_PASSWORD", "postgres"),
+		Name:     getEnv("DB_NAME", "professor_evaluation"),
+		SSLMode:  getEnv("DB_SSLMODE", "disable"),
+	}
+
+	db, err := database.NewPostgresDB(dbConfig)
+	if err != nil {
+		log.Fatalf("Database connection failed: %v", err)
+	}
+
+	log.Println("Database connected successfully")
+
+	// =========================================================
+	// 3. Migration GORM
+	// =========================================================
+
+	if err := database.Migrate(db); err != nil {
+		log.Fatalf("Database migration failed: %v", err)
+	}
+
+	log.Println("Database migration completed")
+
+	// =========================================================
+	// 4. JWT
+	// =========================================================
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET is required")
+	}
+
+	jwtManager := appjwt.NewManager(
+		jwtSecret,
+		24*time.Hour,
+	)
+
+	// =========================================================
+	// 5. Repositories
+	// =========================================================
+
+	userRepository := auth.NewRepository(db)
+	professorRepository := professors.NewRepository(db)
+	courseRepository := courses.NewRepository(db)
+	criteriaRepository := criteria.NewRepository(db)
+	evaluationRepository := evaluations.NewRepository(db)
+	eligibilityRepository := eligibility.NewRepository(db)
+	resultRepository := results.NewRepository(db)
+
+	// =========================================================
+	// 6. Services
+	// =========================================================
+
+	authService := auth.NewService(
+		userRepository,
+		jwtManager,
+	)
+
+	professorService := professors.NewService(
+		professorRepository,
+	)
+
+	courseService := courses.NewService(
+		courseRepository,
+	)
+
+	criteriaService := criteria.NewService(
+		criteriaRepository,
+	)
+
+	evaluationService := evaluations.NewService(
+		evaluationRepository,
+	)
+
+	eligibilityService := eligibility.NewService(
+		eligibilityRepository,
+	)
+
+	resultService := results.NewService(
+		resultRepository,
+	)
+
+	// =========================================================
+	// 7. Handlers
+	// =========================================================
+
+	authHandler := auth.NewHandler(
+		authService,
+	)
+
+	professorHandler := professors.NewHandler(
+		professorService,
+	)
+
+	courseHandler := courses.NewHandler(
+		courseService,
+	)
+
+	criteriaHandler := criteria.NewHandler(
+		criteriaService,
+	)
+
+	evaluationHandler := evaluations.NewHandler(
+		evaluationService,
+	)
+
+	eligibilityHandler := eligibility.NewHandler(
+		eligibilityService,
+	)
+
+	resultHandler := results.NewHandler(
+		resultService,
+	)
+
+	// =========================================================
+	// 8. Router
+	// =========================================================
+
+	router := routes.SetupRouter(
+		routes.RouterDependencies{
+			AuthHandler:     authHandler,
+			CourseHandler:   courseHandler,
+			CriteriaHandler: criteriaHandler,
+			Eligibility:     eligibilityHandler,
+			Evaluation:      evaluationHandler,
+			ProfessorHandler: professorHandler,
+			ResultHandler:   resultHandler,
+			JWTManager:      jwtManager,
+		},
+	)
+
+	// =========================================================
+	// 9. Serveur
+	// =========================================================
+
+	port := getEnv("PORT", "8080")
+
+	log.Printf(
+		"Professor Evaluation API running on http://localhost:%s",
+		port,
+	)
+
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
+}
+
+func getEnv(key string, defaultValue string) string {
+	value := os.Getenv(key)
+
+	if value == "" {
+		return defaultValue
+	}
+
+	return value
+}
