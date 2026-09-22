@@ -3,245 +3,748 @@ package criteria
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func setupTestRouter() *gin.Engine {
+type fakeCriterionService struct {
+	getAllFunc     func() ([]Criterion, error)
+	getActiveFunc  func() ([]Criterion, error)
+	getByIDFunc    func(int) (*Criterion, error)
+	createFunc     func(CreateCriterionRequest) (*Criterion, error)
+	updateFunc     func(int, UpdateCriterionRequest) (*Criterion, error)
+	deleteFunc     func(int) error
+}
+
+func (f *fakeCriterionService) GetAll() ([]Criterion, error) {
+	return f.getAllFunc()
+}
+
+func (f *fakeCriterionService) GetActive() ([]Criterion, error) {
+	return f.getActiveFunc()
+}
+
+func (f *fakeCriterionService) GetByID(id int) (*Criterion, error) {
+	return f.getByIDFunc(id)
+}
+
+func (f *fakeCriterionService) Create(request CreateCriterionRequest) (*Criterion, error) {
+	return f.createFunc(request)
+}
+
+func (f *fakeCriterionService) Update(
+	id int,
+	request UpdateCriterionRequest,
+) (*Criterion, error) {
+	return f.updateFunc(id, request)
+}
+
+func (f *fakeCriterionService) Delete(id int) error {
+	return f.deleteFunc(id)
+}
+
+func setupHandlerTest() *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	
+
 	router := gin.New()
-	
-	// Create simple handlers that just validate input and return mock responses
-	router.GET("/criteria", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"criteria": []Criterion{
-				{ID: 1, Name: "Teaching Quality", Description: "Quality of teaching", MaxScore: 10, Active: true},
-			},
-		})
-	})
-	
-	router.GET("/criteria/active", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"criteria": []Criterion{
-				{ID: 1, Name: "Teaching Quality", Description: "Quality of teaching", MaxScore: 10, Active: true},
-			},
-		})
-	})
-	
-	router.GET("/criteria/:id", func(c *gin.Context) {
-		id := c.Param("id")
-		if id == "invalid" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid criterion ID"})
-			return
-		}
-		
-		c.JSON(http.StatusOK, gin.H{
-			"id":          1,
-			"name":        "Teaching Quality",
-			"description": "Quality of teaching",
-			"max_score":   10,
-			"active":      true,
-		})
-	})
-	
-	router.POST("/criteria", func(c *gin.Context) {
-		var request CreateCriterionRequest
-		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-			return
-		}
-		
-		c.JSON(http.StatusCreated, gin.H{
-			"id":          1,
-			"name":        request.Name,
-			"description": request.Description,
-			"max_score":   request.MaxScore,
-			"active":      true,
-		})
-	})
-	
-	router.PUT("/criteria/:id", func(c *gin.Context) {
-		id := c.Param("id")
-		if id == "invalid" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid criterion ID"})
-			return
-		}
-		
-		var request UpdateCriterionRequest
-		if err := c.ShouldBindJSON(&request); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-			return
-		}
-		
-		c.JSON(http.StatusOK, gin.H{
-			"id":          1,
-			"name":        request.Name,
-			"description": request.Description,
-			"max_score":   request.MaxScore,
-			"active":      request.Active,
-		})
-	})
-	
-	router.DELETE("/criteria/:id", func(c *gin.Context) {
-		id := c.Param("id")
-		if id == "invalid" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid criterion ID"})
-			return
-		}
-		
-		c.JSON(http.StatusOK, gin.H{"message": "criterion deleted successfully"})
-	})
-	
+
+	service := &fakeCriterionService{
+		getAllFunc: func() ([]Criterion, error) {
+			return []Criterion{}, nil
+		},
+		getActiveFunc: func() ([]Criterion, error) {
+			return []Criterion{}, nil
+		},
+		getByIDFunc: func(id int) (*Criterion, error) {
+			return nil, ErrCriterionNotFound
+		},
+		createFunc: func(request CreateCriterionRequest) (*Criterion, error) {
+			return nil, nil
+		},
+		updateFunc: func(
+			id int,
+			request UpdateCriterionRequest,
+		) (*Criterion, error) {
+			return nil, nil
+		},
+		deleteFunc: func(id int) error {
+			return nil
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router.GET("/criteria", handler.GetAll)
+	router.GET("/criteria/active", handler.GetActive)
+	router.GET("/criteria/:id", handler.GetByID)
+	router.POST("/criteria", handler.Create)
+	router.PUT("/criteria/:id", handler.Update)
+	router.DELETE("/criteria/:id", handler.Delete)
+
 	return router
 }
 
-func TestHandler_GetAll_Success(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("GET", "/criteria", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusOK, w.Code)
+func performRequest(
+	router *gin.Engine,
+	method string,
+	url string,
+	body interface{},
+) *httptest.ResponseRecorder {
+
+	var requestBody []byte
+
+	if body != nil {
+		requestBody, _ = json.Marshal(body)
+	}
+
+	req := httptest.NewRequest(
+		method,
+		url,
+		bytes.NewBuffer(requestBody),
+	)
+
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+
+	router.ServeHTTP(recorder, req)
+
+	return recorder
 }
+
+// ---------------------------------------------------------
+// GetAll
+// ---------------------------------------------------------
+
+func TestHandler_GetAll_Success(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &fakeCriterionService{
+		getAllFunc: func() ([]Criterion, error) {
+			return []Criterion{
+				{
+					ID:          1,
+					Name:        "Clarté",
+					Description: "Clarté des explications",
+					MaxScore:    5,
+					Active:      true,
+				},
+			}, nil
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria", handler.GetAll)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(recorder.Body.Bytes(), &response)
+
+	require.NoError(t, err)
+	assert.NotNil(t, response["criteria"])
+}
+
+func TestHandler_GetAll_Error(t *testing.T) {
+	service := &fakeCriterionService{
+		getAllFunc: func() ([]Criterion, error) {
+			return nil, errors.New("database error")
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria", handler.GetAll)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "failed to retrieve criteria")
+}
+
+// ---------------------------------------------------------
+// GetActive
+// ---------------------------------------------------------
 
 func TestHandler_GetActive_Success(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("GET", "/criteria/active", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusOK, w.Code)
+	service := &fakeCriterionService{
+		getActiveFunc: func() ([]Criterion, error) {
+			return []Criterion{
+				{
+					ID:       1,
+					Name:     "Clarté",
+					MaxScore: 5,
+					Active:   true,
+				},
+			}, nil
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria/active", handler.GetActive)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria/active",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "Clarté")
 }
 
+func TestHandler_GetActive_Error(t *testing.T) {
+	service := &fakeCriterionService{
+		getActiveFunc: func() ([]Criterion, error) {
+			return nil, errors.New("database error")
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria/active", handler.GetActive)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria/active",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+	assert.Contains(
+		t,
+		recorder.Body.String(),
+		"failed to retrieve active criteria",
+	)
+}
+
+// ---------------------------------------------------------
+// GetByID
+// ---------------------------------------------------------
+
 func TestHandler_GetByID_Success(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("GET", "/criteria/1", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusOK, w.Code)
+	service := &fakeCriterionService{
+		getByIDFunc: func(id int) (*Criterion, error) {
+			return &Criterion{
+				ID:          id,
+				Name:        "Clarté",
+				Description: "Clarté des explications",
+				MaxScore:    5,
+				Active:      true,
+			}, nil
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria/:id", handler.GetByID)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria/1",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "Clarté")
 }
 
 func TestHandler_GetByID_InvalidID(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("GET", "/criteria/invalid", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	service := &fakeCriterionService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria/:id", handler.GetByID)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria/abc",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "invalid criterion ID")
 }
+
+func TestHandler_GetByID_ZeroID(t *testing.T) {
+	service := &fakeCriterionService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria/:id", handler.GetByID)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria/0",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "invalid criterion ID")
+}
+
+func TestHandler_GetByID_NotFound(t *testing.T) {
+	service := &fakeCriterionService{
+		getByIDFunc: func(id int) (*Criterion, error) {
+			return nil, ErrCriterionNotFound
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria/:id", handler.GetByID)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria/99",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "criterion not found")
+}
+
+func TestHandler_GetByID_InternalError(t *testing.T) {
+	service := &fakeCriterionService{
+		getByIDFunc: func(id int) (*Criterion, error) {
+			return nil, errors.New("database error")
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.GET("/criteria/:id", handler.GetByID)
+
+	recorder := performRequest(
+		router,
+		http.MethodGet,
+		"/criteria/1",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+	assert.Contains(
+		t,
+		recorder.Body.String(),
+		"failed to retrieve criterion",
+	)
+}
+
+// ---------------------------------------------------------
+// Create
+// ---------------------------------------------------------
 
 func TestHandler_Create_Success(t *testing.T) {
-	router := setupTestRouter()
-	
-	request := CreateCriterionRequest{
-		Name:        "Communication Skills",
-		Description: "Communication with students",
-		MaxScore:    10,
+	service := &fakeCriterionService{
+		createFunc: func(request CreateCriterionRequest) (*Criterion, error) {
+			return &Criterion{
+				ID:          1,
+				Name:        request.Name,
+				Description: request.Description,
+				MaxScore:    request.MaxScore,
+				Active:      true,
+			}, nil
+		},
 	}
-	
-	body, _ := json.Marshal(request)
-	req := httptest.NewRequest("POST", "/criteria", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusCreated, w.Code)
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.POST("/criteria", handler.Create)
+
+	body := CreateCriterionRequest{
+		Name:        "Clarté",
+		Description: "Clarté des explications",
+		MaxScore:    5,
+	}
+
+	recorder := performRequest(
+		router,
+		http.MethodPost,
+		"/criteria",
+		body,
+	)
+
+	assert.Equal(t, http.StatusCreated, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "Clarté")
 }
 
-func TestHandler_Create_InvalidJSON(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("POST", "/criteria", bytes.NewBuffer([]byte("invalid json")))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+func TestHandler_Create_InvalidRequest(t *testing.T) {
+	service := &fakeCriterionService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.POST("/criteria", handler.Create)
+
+	recorder := performRequest(
+		router,
+		http.MethodPost,
+		"/criteria",
+		map[string]interface{}{
+			"name": "Clarté",
+		},
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "invalid request")
 }
 
-func TestHandler_Create_MissingRequiredFields(t *testing.T) {
-	router := setupTestRouter()
-	
-	request := CreateCriterionRequest{
-		Name: "Communication Skills",
-		// Missing required fields
+func TestHandler_Create_ServiceError(t *testing.T) {
+	service := &fakeCriterionService{
+		createFunc: func(request CreateCriterionRequest) (*Criterion, error) {
+			return nil, ErrCriterionNameRequired
+		},
 	}
-	
-	body, _ := json.Marshal(request)
-	req := httptest.NewRequest("POST", "/criteria", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.POST("/criteria", handler.Create)
+
+	body := CreateCriterionRequest{
+		Name:     "Clarté",
+		MaxScore: 5,
+	}
+
+	recorder := performRequest(
+		router,
+		http.MethodPost,
+		"/criteria",
+		body,
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "criterion name is required")
 }
+
+// ---------------------------------------------------------
+// Update
+// ---------------------------------------------------------
 
 func TestHandler_Update_Success(t *testing.T) {
-	router := setupTestRouter()
-	
-	request := UpdateCriterionRequest{
-		Name:        "Communication Skills Updated",
-		Description: "Updated description",
-		MaxScore:    10,
+	service := &fakeCriterionService{
+		updateFunc: func(
+			id int,
+			request UpdateCriterionRequest,
+		) (*Criterion, error) {
+
+			return &Criterion{
+				ID:          id,
+				Name:        request.Name,
+				Description: request.Description,
+				MaxScore:    request.MaxScore,
+				Active:      request.Active,
+			}, nil
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.PUT("/criteria/:id", handler.Update)
+
+	body := UpdateCriterionRequest{
+		Name:        "Clarté",
+		Description: "Bonne clarté",
+		MaxScore:    5,
 		Active:      true,
 	}
-	
-	body, _ := json.Marshal(request)
-	req := httptest.NewRequest("PUT", "/criteria/1", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusOK, w.Code)
+
+	recorder := performRequest(
+		router,
+		http.MethodPut,
+		"/criteria/1",
+		body,
+	)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "Clarté")
 }
 
 func TestHandler_Update_InvalidID(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("PUT", "/criteria/invalid", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	service := &fakeCriterionService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.PUT("/criteria/:id", handler.Update)
+
+	body := UpdateCriterionRequest{
+		Name:     "Clarté",
+		MaxScore: 5,
+	}
+
+	recorder := performRequest(
+		router,
+		http.MethodPut,
+		"/criteria/abc",
+		body,
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "invalid criterion ID")
 }
 
-func TestHandler_Update_InvalidJSON(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("PUT", "/criteria/1", bytes.NewBuffer([]byte("invalid json")))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+func TestHandler_Update_ZeroID(t *testing.T) {
+	service := &fakeCriterionService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.PUT("/criteria/:id", handler.Update)
+
+	body := UpdateCriterionRequest{
+		Name:     "Clarté",
+		MaxScore: 5,
+	}
+
+	recorder := performRequest(
+		router,
+		http.MethodPut,
+		"/criteria/0",
+		body,
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "invalid criterion ID")
 }
+
+func TestHandler_Update_InvalidRequest(t *testing.T) {
+	service := &fakeCriterionService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.PUT("/criteria/:id", handler.Update)
+
+	recorder := performRequest(
+		router,
+		http.MethodPut,
+		"/criteria/1",
+		map[string]interface{}{
+			"name": "Clarté",
+		},
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "invalid request")
+}
+
+func TestHandler_Update_NotFound(t *testing.T) {
+	service := &fakeCriterionService{
+		updateFunc: func(
+			id int,
+			request UpdateCriterionRequest,
+		) (*Criterion, error) {
+			return nil, ErrCriterionNotFound
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.PUT("/criteria/:id", handler.Update)
+
+	body := UpdateCriterionRequest{
+		Name:     "Clarté",
+		MaxScore: 5,
+		Active:   true,
+	}
+
+	recorder := performRequest(
+		router,
+		http.MethodPut,
+		"/criteria/99",
+		body,
+	)
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "criterion not found")
+}
+
+func TestHandler_Update_ServiceError(t *testing.T) {
+	service := &fakeCriterionService{
+		updateFunc: func(
+			id int,
+			request UpdateCriterionRequest,
+		) (*Criterion, error) {
+			return nil, ErrMaxScoreInvalid
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.PUT("/criteria/:id", handler.Update)
+
+	body := UpdateCriterionRequest{
+		Name:     "Clarté",
+		MaxScore: 0,
+		Active:   true,
+	}
+
+	recorder := performRequest(
+		router,
+		http.MethodPut,
+		"/criteria/1",
+		body,
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "max score must be greater than zero")
+}
+
+// ---------------------------------------------------------
+// Delete
+// ---------------------------------------------------------
 
 func TestHandler_Delete_Success(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("DELETE", "/criteria/1", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusOK, w.Code)
+	service := &fakeCriterionService{
+		deleteFunc: func(id int) error {
+			return nil
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/criteria/:id", handler.Delete)
+
+	recorder := performRequest(
+		router,
+		http.MethodDelete,
+		"/criteria/1",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(
+		t,
+		recorder.Body.String(),
+		"criterion deleted successfully",
+	)
 }
 
 func TestHandler_Delete_InvalidID(t *testing.T) {
-	router := setupTestRouter()
-	
-	req := httptest.NewRequest("DELETE", "/criteria/invalid", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	service := &fakeCriterionService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/criteria/:id", handler.Delete)
+
+	recorder := performRequest(
+		router,
+		http.MethodDelete,
+		"/criteria/abc",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "invalid criterion ID")
+}
+
+func TestHandler_Delete_ZeroID(t *testing.T) {
+	service := &fakeCriterionService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/criteria/:id", handler.Delete)
+
+	recorder := performRequest(
+		router,
+		http.MethodDelete,
+		"/criteria/0",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "invalid criterion ID")
+}
+
+func TestHandler_Delete_NotFound(t *testing.T) {
+	service := &fakeCriterionService{
+		deleteFunc: func(id int) error {
+			return ErrCriterionNotFound
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/criteria/:id", handler.Delete)
+
+	recorder := performRequest(
+		router,
+		http.MethodDelete,
+		"/criteria/99",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "criterion not found")
+}
+
+func TestHandler_Delete_InternalError(t *testing.T) {
+	service := &fakeCriterionService{
+		deleteFunc: func(id int) error {
+			return errors.New("database error")
+		},
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/criteria/:id", handler.Delete)
+
+	recorder := performRequest(
+		router,
+		http.MethodDelete,
+		"/criteria/1",
+		nil,
+	)
+
+	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+	assert.Contains(
+		t,
+		recorder.Body.String(),
+		"failed to delete criterion",
+	)
 }

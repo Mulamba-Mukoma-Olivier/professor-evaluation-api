@@ -1,17 +1,27 @@
 package criteria
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service *Service
+type CriterionService interface {
+	GetAll() ([]Criterion, error)
+	GetActive() ([]Criterion, error)
+	GetByID(id int) (*Criterion, error)
+	Create(request CreateCriterionRequest) (*Criterion, error)
+	Update(id int, request UpdateCriterionRequest) (*Criterion, error)
+	Delete(id int) error
 }
 
-func NewHandler(service *Service) *Handler {
+type Handler struct {
+	service CriterionService
+}
+
+func NewHandler(service CriterionService) *Handler {
 	return &Handler{
 		service: service,
 	}
@@ -20,7 +30,6 @@ func NewHandler(service *Service) *Handler {
 // GET /criteria
 func (h *Handler) GetAll(c *gin.Context) {
 	criteria, err := h.service.GetAll()
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to retrieve criteria",
@@ -36,7 +45,6 @@ func (h *Handler) GetAll(c *gin.Context) {
 // GET /criteria/active
 func (h *Handler) GetActive(c *gin.Context) {
 	criteria, err := h.service.GetActive()
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to retrieve active criteria",
@@ -52,8 +60,7 @@ func (h *Handler) GetActive(c *gin.Context) {
 // GET /criteria/:id
 func (h *Handler) GetByID(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
-
-	if err != nil {
+	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid criterion ID",
 		})
@@ -61,10 +68,16 @@ func (h *Handler) GetByID(c *gin.Context) {
 	}
 
 	criterion, err := h.service.GetByID(id)
-
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "criterion not found",
+		if errors.Is(err, ErrCriterionNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "criterion not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to retrieve criterion",
 		})
 		return
 	}
@@ -84,7 +97,6 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	criterion, err := h.service.Create(request)
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -98,8 +110,7 @@ func (h *Handler) Create(c *gin.Context) {
 // PUT /criteria/:id
 func (h *Handler) Update(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
-
-	if err != nil {
+	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid criterion ID",
 		})
@@ -116,8 +127,14 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	criterion, err := h.service.Update(id, request)
-
 	if err != nil {
+		if errors.Is(err, ErrCriterionNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "criterion not found",
+			})
+			return
+		}
+
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
@@ -130,8 +147,7 @@ func (h *Handler) Update(c *gin.Context) {
 // DELETE /criteria/:id
 func (h *Handler) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
-
-	if err != nil {
+	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid criterion ID",
 		})
@@ -139,10 +155,16 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	err = h.service.Delete(id)
-
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
+		if errors.Is(err, ErrCriterionNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "criterion not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to delete criterion",
 		})
 		return
 	}

@@ -1,17 +1,22 @@
 package eligibility
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service *Service
+type EligibilityService interface {
+	Check(studentID int) (*Eligibility, error)
 }
 
-func NewHandler(service *Service) *Handler {
+type Handler struct {
+	service EligibilityService
+}
+
+func NewHandler(service EligibilityService) *Handler {
 	return &Handler{
 		service: service,
 	}
@@ -30,8 +35,15 @@ func (h *Handler) Check(c *gin.Context) {
 	eligibility, err := h.service.Check(studentID)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
+		if errors.Is(err, ErrEligibilityNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "student eligibility not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
 		})
 		return
 	}

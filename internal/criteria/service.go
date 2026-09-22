@@ -1,12 +1,30 @@
 package criteria
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
-type Service struct {
-	repository *Repository
+var (
+	ErrInvalidCriterionID       = errors.New("invalid criterion ID")
+	ErrCriterionNameRequired    = errors.New("criterion name is required")
+	ErrMaxScoreInvalid          = errors.New("max score must be greater than zero")
+)
+
+type CriterionRepository interface {
+	GetAll() ([]Criterion, error)
+	GetActive() ([]Criterion, error)
+	GetByID(id int) (*Criterion, error)
+	Create(criterion Criterion) (*Criterion, error)
+	Update(id int, criterion Criterion) (*Criterion, error)
+	Delete(id int) error
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository CriterionRepository
+}
+
+func NewService(repository CriterionRepository) *Service {
 	return &Service{
 		repository: repository,
 	}
@@ -22,19 +40,22 @@ func (s *Service) GetActive() ([]Criterion, error) {
 
 func (s *Service) GetByID(id int) (*Criterion, error) {
 	if id <= 0 {
-		return nil, errors.New("invalid criterion ID")
+		return nil, ErrInvalidCriterionID
 	}
 
 	return s.repository.GetByID(id)
 }
 
 func (s *Service) Create(request CreateCriterionRequest) (*Criterion, error) {
+	request.Name = strings.TrimSpace(request.Name)
+	request.Description = strings.TrimSpace(request.Description)
+
 	if request.Name == "" {
-		return nil, errors.New("criterion name is required")
+		return nil, ErrCriterionNameRequired
 	}
 
 	if request.MaxScore <= 0 {
-		return nil, errors.New("max score must be greater than zero")
+		return nil, ErrMaxScoreInvalid
 	}
 
 	criterion := Criterion{
@@ -47,17 +68,23 @@ func (s *Service) Create(request CreateCriterionRequest) (*Criterion, error) {
 	return s.repository.Create(criterion)
 }
 
-func (s *Service) Update(id int, request UpdateCriterionRequest) (*Criterion, error) {
+func (s *Service) Update(
+	id int,
+	request UpdateCriterionRequest,
+) (*Criterion, error) {
 	if id <= 0 {
-		return nil, errors.New("invalid criterion ID")
+		return nil, ErrInvalidCriterionID
 	}
 
+	request.Name = strings.TrimSpace(request.Name)
+	request.Description = strings.TrimSpace(request.Description)
+
 	if request.Name == "" {
-		return nil, errors.New("criterion name is required")
+		return nil, ErrCriterionNameRequired
 	}
 
 	if request.MaxScore <= 0 {
-		return nil, errors.New("max score must be greater than zero")
+		return nil, ErrMaxScoreInvalid
 	}
 
 	criterion := Criterion{
@@ -72,7 +99,7 @@ func (s *Service) Update(id int, request UpdateCriterionRequest) (*Criterion, er
 
 func (s *Service) Delete(id int) error {
 	if id <= 0 {
-		return errors.New("invalid criterion ID")
+		return ErrInvalidCriterionID
 	}
 
 	return s.repository.Delete(id)

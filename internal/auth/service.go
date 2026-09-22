@@ -19,21 +19,26 @@ func NewService(repository *Repository) *Service {
 }
 
 func (s *Service) Login(request LoginRequest) (*User, error) {
+	// Normaliser l'email
 	request.Email = strings.TrimSpace(strings.ToLower(request.Email))
-	if request.Email == "" {
+
+	// Vérifier les données
+	if request.Email == "" || request.Password == "" {
 		return nil, errors.New("invalid credentials")
 	}
 
+	// Rechercher l'utilisateur
 	user, err := s.repository.FindByEmail(request.Email)
 	if err != nil {
+		// Ne jamais révéler si l'email existe ou non
 		return nil, errors.New("invalid credentials")
 	}
 
-	err = bcrypt.CompareHashAndPassword(
+	// Vérifier le mot de passe
+	if err := bcrypt.CompareHashAndPassword(
 		[]byte(user.PasswordHash),
 		[]byte(request.Password),
-	)
-	if err != nil {
+	); err != nil {
 		return nil, errors.New("invalid credentials")
 	}
 
@@ -41,53 +46,99 @@ func (s *Service) Login(request LoginRequest) (*User, error) {
 }
 
 func (s *Service) Register(request RegisterRequest) (*User, error) {
-	// check existing user
-	if user, err := s.repository.FindByMatricule(request.Matricule); err == nil && user != nil {
-		return nil, errors.New("user already exists")
-	}
-	if user, err := s.repository.FindByEmail(request.Email); err == nil && user != nil {
-		return nil, errors.New("user already exists")
+	// Normaliser les données
+	request.Matricule = strings.TrimSpace(request.Matricule)
+	request.Name = strings.TrimSpace(request.Name)
+	request.Email = strings.TrimSpace(strings.ToLower(request.Email))
+	request.Role = strings.ToUpper(strings.TrimSpace(request.Role))
+
+	// Validation
+	if request.Matricule == "" {
+		return nil, errors.New("matricule is required")
 	}
 
-	// normalize and validate email
-	request.Email = strings.TrimSpace(strings.ToLower(request.Email))
+	if request.Name == "" {
+		return nil, errors.New("name is required")
+	}
+
+	if request.Email == "" {
+		return nil, errors.New("email is required")
+	}
+
+	if request.Password == "" {
+		return nil, errors.New("password is required")
+	}
+
+	if len(request.Password) < 8 {
+		return nil, errors.New("password must contain at least 8 characters")
+	}
+
+	// Validation email
 	if _, err := mail.ParseAddress(request.Email); err != nil {
 		return nil, errors.New("invalid email")
 	}
 
-	// validate and set default role
-	allowedRoles := map[string]bool{
-		"STUDENT":   true,
-		"PROFESSOR": true,
-		"ADMIN":     true,
-	}
-
-	request.Role = strings.ToUpper(strings.TrimSpace(request.Role))
+	// Rôle par défaut
 	if request.Role == "" {
 		request.Role = "STUDENT"
 	}
 
-	if !allowedRoles[request.Role] {
-		return nil, errors.New("invalid role. Allowed roles: STUDENT, PROFESSOR, ADMIN")
+	// Vérification du rôle
+	switch request.Role {
+	case "STUDENT", "PROFESSOR", "ADMIN":
+		// rôle valide
+
+	default:
+		return nil, errors.New(
+			"invalid role. Allowed roles: STUDENT, PROFESSOR, ADMIN",
+		)
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)
-	if err != nil {
+	// Vérifier le matricule
+	existingUser, err := s.repository.FindByMatricule(request.Matricule)
+
+	if err == nil && existingUser != nil {
+		return nil, errors.New("matricule already exists")
+	}
+
+	if err != nil && !errors.Is(err, ErrUserNotFound) {
 		return nil, err
 	}
 
+	// Vérifier l'email
+	existingUser, err = s.repository.FindByEmail(request.Email)
+
+	if err == nil && existingUser != nil {
+		return nil, errors.New("email already exists")
+	}
+
+	if err != nil && !errors.Is(err, ErrUserNotFound) {
+		return nil, err
+	}
+
+	// Hasher le mot de passe
+	passwordHash, err := bcrypt.GenerateFromPassword(
+		[]byte(request.Password),
+		bcrypt.DefaultCost,
+	)
+	if err != nil {
+		return nil, errors.New("failed to hash password")
+	}
+
+	// Construire l'utilisateur
 	user := User{
 		Matricule:    request.Matricule,
 		Name:         request.Name,
 		Email:        request.Email,
-		PasswordHash: string(hash),
+		PasswordHash: string(passwordHash),
 		Role:         request.Role,
 	}
 
-	created, err := s.repository.Create(user)
+	// Enregistrer l'utilisateur
+	createdUser, err := s.repository.Create(user)
 	if err != nil {
 		return nil, err
 	}
 
-	return created, nil
+	return createdUser, nil
 }

@@ -1,6 +1,7 @@
 package professors
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -8,11 +9,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service *Service
+type ProfessorService interface {
+	GetAllPaginated(page, pageSize int) ([]Professor, int, error)
+	GetActive() ([]Professor, error)
+	GetByStatus(status string) ([]Professor, error)
+	GetByID(id int) (*Professor, error)
+	Create(request CreateProfessorRequest) (*Professor, error)
+	Update(id int, request UpdateProfessorRequest) (*Professor, error)
+	Delete(id int) error
 }
 
-func NewHandler(service *Service) *Handler {
+type Handler struct {
+	service ProfessorService
+}
+
+func NewHandler(service ProfessorService) *Handler {
 	return &Handler{
 		service: service,
 	}
@@ -20,26 +31,30 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) GetAll(c *gin.Context) {
 	page, pageSize := pagination.GetPagination(c)
-	
-	professors, total, err := h.service.GetAllPaginated(page, pageSize)
 
+	professors, total, err := h.service.GetAllPaginated(page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
+			"error": "internal server error",
 		})
 		return
 	}
 
-	response := pagination.BuildResponse(professors, page, pageSize, total)
+	response := pagination.BuildResponse(
+		professors,
+		page,
+		pageSize,
+		total,
+	)
+
 	c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) GetActive(c *gin.Context) {
 	professors, err := h.service.GetActive()
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
+			"error": "internal server error",
 		})
 		return
 	}
@@ -51,6 +66,7 @@ func (h *Handler) GetActive(c *gin.Context) {
 
 func (h *Handler) GetByStatus(c *gin.Context) {
 	status := c.Query("status")
+
 	if status == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "status parameter is required",
@@ -59,9 +75,8 @@ func (h *Handler) GetByStatus(c *gin.Context) {
 	}
 
 	professors, err := h.service.GetByStatus(status)
-
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -85,8 +100,15 @@ func (h *Handler) GetByID(c *gin.Context) {
 	professor, err := h.service.GetByID(id)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "professor not found",
+		if errors.Is(err, ErrProfessorNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "professor not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
 		})
 		return
 	}
@@ -138,6 +160,13 @@ func (h *Handler) Update(c *gin.Context) {
 	professor, err := h.service.Update(id, request)
 
 	if err != nil {
+		if errors.Is(err, ErrProfessorNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "professor not found",
+			})
+			return
+		}
+
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
@@ -157,9 +186,18 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Delete(id); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
+	err = h.service.Delete(id)
+
+	if err != nil {
+		if errors.Is(err, ErrProfessorNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "professor not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
 		})
 		return
 	}

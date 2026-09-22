@@ -4,27 +4,57 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func TestNewService(t *testing.T) {
-	// Simple test to verify service creation
 	repo := &Repository{}
+
 	service := NewService(repo)
 
-	assert.NotNil(t, service)
-	assert.NotNil(t, service.repository)
+	require.NotNil(t, service)
+	assert.Equal(t, repo, service.repository)
 }
 
-func TestService_Register_PasswordHashing(t *testing.T) {
-	// Test password hashing functionality
+func TestPasswordHashing(t *testing.T) {
 	password := "password123"
-	
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	assert.NoError(t, err)
+
+	hashedPassword, err := bcrypt.GenerateFromPassword(
+		[]byte(password),
+		bcrypt.DefaultCost,
+	)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, hashedPassword)
+
+	// Le mot de passe en clair ne doit jamais être égal au hash.
 	assert.NotEqual(t, password, string(hashedPassword))
 
-	// Verify hash can be checked
-	err = bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
+	// Le hash doit permettre de vérifier le mot de passe original.
+	err = bcrypt.CompareHashAndPassword(
+		hashedPassword,
+		[]byte(password),
+	)
+
 	assert.NoError(t, err)
+}
+
+func TestPasswordHashing_WrongPassword(t *testing.T) {
+	password := "password123"
+	wrongPassword := "wrongpassword"
+
+	hashedPassword, err := bcrypt.GenerateFromPassword(
+		[]byte(password),
+		bcrypt.DefaultCost,
+	)
+
+	require.NoError(t, err)
+
+	err = bcrypt.CompareHashAndPassword(
+		hashedPassword,
+		[]byte(wrongPassword),
+	)
+
+	assert.Error(t, err)
 }

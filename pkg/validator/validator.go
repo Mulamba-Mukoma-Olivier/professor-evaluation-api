@@ -3,6 +3,7 @@ package validator
 import (
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -29,10 +30,12 @@ func ValidateRequired(value string) error {
 	return nil
 }
 
-// ValidatePassword vérifie la longueur minimale
-// du mot de passe.
+// ValidatePassword vérifie que le mot de passe
+// contient au moins 8 caractères.
 func ValidatePassword(password string) error {
-	if len(password) < 8 {
+	password = strings.TrimSpace(password)
+
+	if utf8.RuneCountInString(password) < 8 {
 		return errors.New(
 			"password must contain at least 8 characters",
 		)

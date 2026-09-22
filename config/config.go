@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"log"
@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-
-	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/database"
 
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/auth"
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/courses"
@@ -17,9 +15,10 @@ import (
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/professors"
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/results"
 
-	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/routes"
-
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/database"
 	appjwt "github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/jwt"
+
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/routes"
 )
 
 func main() {
@@ -28,7 +27,7 @@ func main() {
 	// =========================================================
 
 	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: .env file not found")
+		log.Println("Warning: .env file not found, using environment variables")
 	}
 
 	// =========================================================
@@ -49,17 +48,24 @@ func main() {
 		log.Fatalf("Database connection failed: %v", err)
 	}
 
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("Failed to get database instance: %v", err)
+	}
+
+	defer sqlDB.Close()
+
 	log.Println("Database connected successfully")
 
 	// =========================================================
-	// 3. Migration GORM
+	// 3. Database migrations
 	// =========================================================
 
-	if err := database.RunMigrations(dbConfig); err != nil {
+	if err := database.Migrate(db, dbConfig); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
 	}
 
-	log.Println("Database migration completed")
+	log.Println("Database migration completed successfully")
 
 	// =========================================================
 	// 4. JWT
@@ -159,19 +165,19 @@ func main() {
 
 	router := routes.SetupRouter(
 		routes.RouterDependencies{
-			AuthHandler:     authHandler,
-			CourseHandler:   courseHandler,
-			CriteriaHandler: criteriaHandler,
-			Eligibility:     eligibilityHandler,
-			Evaluation:      evaluationHandler,
+			AuthHandler:      authHandler,
+			CourseHandler:    courseHandler,
+			CriteriaHandler:  criteriaHandler,
+			Eligibility:      eligibilityHandler,
+			Evaluation:       evaluationHandler,
 			ProfessorHandler: professorHandler,
-			ResultHandler:   resultHandler,
-			JWTManager:      jwtManager,
+			ResultHandler:    resultHandler,
+			JWTManager:       jwtManager,
 		},
 	)
 
 	// =========================================================
-	// 9. Serveur
+	// 9. Serveur HTTP
 	// =========================================================
 
 	port := getEnv("PORT", "8080")
@@ -186,6 +192,8 @@ func main() {
 	}
 }
 
+// getEnv récupère une variable d'environnement.
+// Si elle n'existe pas, la valeur par défaut est utilisée.
 func getEnv(key string, defaultValue string) string {
 	value := os.Getenv(key)
 

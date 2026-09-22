@@ -7,14 +7,14 @@ import (
 
 // User représente un utilisateur de l'application.
 type User struct {
-	ID           int                       `json:"id" gorm:"primaryKey"`
-	Matricule    string                    `json:"matricule" gorm:"uniqueIndex;not null"`
-	Name         string                    `json:"name" gorm:"not null"`
-	Email        string                    `json:"email" gorm:"uniqueIndex;not null"`
-	PasswordHash string                    `json:"-" gorm:"not null"`
-	Role         string                    `json:"role" gorm:"not null"`
-	Eligibility  *eligibility.Eligibility `json:"eligibility" gorm:"foreignKey:StudentID;references:ID"`
-	Evaluations []evaluations.Evaluation `json:"evaluations" gorm:"foreignKey:StudentID;references:ID"`
+	ID           int                      `json:"id" gorm:"primaryKey"`
+	Matricule    string                   `json:"matricule" gorm:"not null"`
+	Name         string                   `json:"name" gorm:"not null"`
+	Email        string                   `json:"email" gorm:"not null"`
+	PasswordHash string                   `json:"-"`
+	Role         string                   `json:"role" gorm:"not null"`
+	Eligibility  *eligibility.Eligibility `json:"eligibility,omitempty" gorm:"foreignKey:StudentID;references:ID"`
+	Evaluations  []evaluations.Evaluation `json:"evaluations,omitempty" gorm:"foreignKey:StudentID;references:ID"`
 }
 
 // LoginRequest représente les données envoyées lors de la connexion.
@@ -35,6 +35,6 @@ type RegisterRequest struct {
 	Matricule string `json:"matricule" binding:"required"`
 	Name      string `json:"name" binding:"required"`
 	Email     string `json:"email" binding:"required,email"`
-	Password  string `json:"password" binding:"required"`
-	Role      string `json:"role"`
+	Password  string `json:"password" binding:"required,min=8"`
+	Role      string `json:"role" binding:"required,oneof=STUDENT PROFESSOR ADMIN"`
 }

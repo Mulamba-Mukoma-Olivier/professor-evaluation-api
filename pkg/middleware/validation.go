@@ -8,45 +8,50 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ValidateEmail validates email format
+var (
+	emailRegex     = regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$`)
+	matriculeRegex = regexp.MustCompile(`^[a-zA-Z0-9]{6,20}$`)
+)
+
+// ValidateEmail vérifie le format général d'une adresse email.
 func ValidateEmail(email string) bool {
-	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	email = strings.TrimSpace(email)
+
+	if email == "" || len(email) > 254 {
+		return false
+	}
+
 	return emailRegex.MatchString(email)
 }
 
-// ValidateMatricule validates matricule format (adjust pattern as needed)
+// ValidateMatricule vérifie le format d'un matricule.
+// Format accepté : 6 à 20 caractères alphanumériques.
 func ValidateMatricule(matricule string) bool {
-	// Example: alphanumeric, 6-20 characters
-	matriculeRegex := regexp.MustCompile(`^[a-zA-Z0-9]{6,20}$`)
+	matricule = strings.TrimSpace(matricule)
+
 	return matriculeRegex.MatchString(matricule)
 }
 
-// SanitizeInput removes potentially dangerous characters
+// SanitizeInput nettoie uniquement les espaces inutiles.
+// La protection contre les injections SQL doit être assurée
+// par l'utilisation de requêtes paramétrées / GORM.
 func SanitizeInput(input string) string {
-	// Remove potential SQL injection patterns
-	dangerousPatterns := []string{
-		"'", ";", "--", "/*", "*/", "xp_", "sp_",
-		"drop", "delete", "insert", "update", "exec",
-	}
-
-	sanitized := input
-	for _, pattern := range dangerousPatterns {
-		sanitized = strings.ReplaceAll(
-			strings.ToLower(sanitized),
-			strings.ToLower(pattern),
-			"",
-		)
-	}
-
-	return sanitized
+	return strings.TrimSpace(input)
 }
 
-// ValidateJSONContentType ensures request has JSON content type
+// ValidateJSONContentType vérifie que les requêtes
+// POST, PUT et PATCH utilisent application/json.
 func ValidateJSONContentType() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.Method == "POST" || c.Request.Method == "PUT" {
+		switch c.Request.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch:
 			contentType := c.GetHeader("Content-Type")
-			if !strings.Contains(contentType, "application/json") {
+
+			if contentType == "" ||
+				!strings.HasPrefix(
+					strings.ToLower(contentType),
+					"application/json",
+				) {
 				c.JSON(http.StatusUnsupportedMediaType, gin.H{
 					"error": "content-type must be application/json",
 				})
@@ -54,14 +59,28 @@ func ValidateJSONContentType() gin.HandlerFunc {
 				return
 			}
 		}
+
 		c.Next()
 	}
 }
 
-// ValidateRequestSize limits request body size
+// ValidateRequestSize limite la taille du corps de la requête.
 func ValidateRequestSize(maxSize int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxSize)
+		if maxSize <= 0 {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "invalid maximum request size",
+			})
+			c.Abort()
+			return
+		}
+
+		c.Request.Body = http.MaxBytesReader(
+			c.Writer,
+			c.Request.Body,
+			maxSize,
+		)
+
 		c.Next()
 	}
 }

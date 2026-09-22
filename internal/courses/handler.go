@@ -1,29 +1,36 @@
 package courses
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service *Service
+type CourseService interface {
+	GetAll() ([]Course, error)
+	GetByID(id int) (*Course, error)
+	Create(request CreateCourseRequest) (*Course, error)
+	Update(id int, request UpdateCourseRequest) (*Course, error)
+	Delete(id int) error
 }
 
-func NewHandler(service *Service) *Handler {
+type Handler struct {
+	service CourseService
+}
+
+func NewHandler(service CourseService) *Handler {
 	return &Handler{
 		service: service,
 	}
 }
 
-// GET /courses
 func (h *Handler) GetAll(c *gin.Context) {
 	courses, err := h.service.GetAll()
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
+			"error": "internal server error",
 		})
 		return
 	}
@@ -33,11 +40,9 @@ func (h *Handler) GetAll(c *gin.Context) {
 	})
 }
 
-// GET /courses/:id
 func (h *Handler) GetByID(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
-
-	if err != nil {
+	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid course ID",
 		})
@@ -45,10 +50,16 @@ func (h *Handler) GetByID(c *gin.Context) {
 	}
 
 	course, err := h.service.GetByID(id)
-
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "course not found",
+		if errors.Is(err, ErrCourseNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "course not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
 		})
 		return
 	}
@@ -56,7 +67,6 @@ func (h *Handler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, course)
 }
 
-// POST /courses
 func (h *Handler) Create(c *gin.Context) {
 	var request CreateCourseRequest
 
@@ -68,7 +78,6 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	course, err := h.service.Create(request)
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -79,11 +88,9 @@ func (h *Handler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, course)
 }
 
-// PUT /courses/:id
 func (h *Handler) Update(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
-
-	if err != nil {
+	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid course ID",
 		})
@@ -100,9 +107,15 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	course, err := h.service.Update(id, request)
-
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
+		if errors.Is(err, ErrCourseNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "course not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -111,11 +124,9 @@ func (h *Handler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, course)
 }
 
-// DELETE /courses/:id
 func (h *Handler) Delete(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
-
-	if err != nil {
+	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "invalid course ID",
 		})
@@ -123,10 +134,16 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	err = h.service.Delete(id)
-
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
+		if errors.Is(err, ErrCourseNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "course not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
 		})
 		return
 	}

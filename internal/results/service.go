@@ -3,13 +3,34 @@ package results
 import (
 	"errors"
 	"sort"
+	"strings"
+
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/evaluations"
 )
 
-type Service struct {
-	repository *Repository
+var (
+	ErrInvalidProfessorID = errors.New("invalid professor ID")
+	ErrInvalidCourseID    = errors.New("invalid course ID")
+	ErrAcademicYearRequired = errors.New("academic year is required")
+	ErrPeriodRequired       = errors.New("period is required")
+	ErrNoEvaluations        = errors.New("no evaluations found")
+	ErrNoAnswers            = errors.New("evaluations contain no answers")
+)
+
+type ResultsRepository interface {
+	GetByProfessor(
+		professorID int,
+		courseID int,
+		academicYear string,
+		period string,
+	) ([]evaluations.Evaluation, error)
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository ResultsRepository
+}
+
+func NewService(repository ResultsRepository) *Service {
 	return &Service{
 		repository: repository,
 	}
@@ -23,22 +44,26 @@ func (s *Service) GetProfessorResult(
 ) (*ProfessorResult, error) {
 
 	if professorID <= 0 {
-		return nil, errors.New("invalid professor ID")
+		return nil, ErrInvalidProfessorID
 	}
 
 	if courseID <= 0 {
-		return nil, errors.New("invalid course ID")
+		return nil, ErrInvalidCourseID
 	}
+
+	academicYear = strings.TrimSpace(academicYear)
 
 	if academicYear == "" {
-		return nil, errors.New("academic year is required")
+		return nil, ErrAcademicYearRequired
 	}
+
+	period = strings.TrimSpace(period)
 
 	if period == "" {
-		return nil, errors.New("period is required")
+		return nil, ErrPeriodRequired
 	}
 
-	evaluations, err := s.repository.GetByProfessor(
+	evaluationList, err := s.repository.GetByProfessor(
 		professorID,
 		courseID,
 		academicYear,
@@ -49,22 +74,26 @@ func (s *Service) GetProfessorResult(
 		return nil, err
 	}
 
-	if len(evaluations) == 0 {
-		return nil, errors.New("no evaluations found")
+	if len(evaluationList) == 0 {
+		return nil, ErrNoEvaluations
 	}
 
-	// criterionID -> total score
+	// criterionID -> total des scores
 	totals := make(map[int]int)
 
-	// criterionID -> number of responses
+	// criterionID -> nombre de réponses
 	counts := make(map[int]int)
 
 	globalTotal := 0
 	globalCount := 0
 
-	for _, evaluation := range evaluations {
-
+	for _, evaluation := range evaluationList {
 		for _, answer := range evaluation.Answers {
+
+			// Ignore les réponses avec un critère invalide.
+			if answer.CriterionID <= 0 {
+				continue
+			}
 
 			totals[answer.CriterionID] += answer.Score
 			counts[answer.CriterionID]++
@@ -75,13 +104,12 @@ func (s *Service) GetProfessorResult(
 	}
 
 	if globalCount == 0 {
-		return nil, errors.New("evaluations contain no answers")
+		return nil, ErrNoAnswers
 	}
 
 	criteria := make([]CriterionResult, 0, len(totals))
 
 	for criterionID, total := range totals {
-
 		count := counts[criterionID]
 
 		if count == 0 {
@@ -97,9 +125,8 @@ func (s *Service) GetProfessorResult(
 		})
 	}
 
-	// Les maps Go ne garantissent pas l'ordre.
-	// On trie les critères par ID pour obtenir
-	// une réponse API stable.
+	// Les maps Go n'ont pas d'ordre garanti.
+	// On trie donc les critères par ID.
 	sort.Slice(criteria, func(i, j int) bool {
 		return criteria[i].CriterionID < criteria[j].CriterionID
 	})
@@ -112,7 +139,7 @@ func (s *Service) GetProfessorResult(
 		CourseID:      courseID,
 		AcademicYear:  academicYear,
 		Period:        period,
-		TotalReviews:  len(evaluations),
+		TotalReviews:  len(evaluationList),
 		GlobalAverage: globalAverage,
 		Criteria:      criteria,
 	}, nil

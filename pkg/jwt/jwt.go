@@ -2,9 +2,18 @@ package jwt
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	ErrSecretKeyRequired    = errors.New("JWT secret key is required")
+	ErrTokenDurationInvalid = errors.New("JWT token duration must be greater than zero")
+	ErrTokenRequired        = errors.New("token is required")
+	ErrInvalidToken         = errors.New("invalid token")
+	ErrUnexpectedMethod     = errors.New("unexpected signing method")
 )
 
 type Manager struct {
@@ -30,18 +39,34 @@ func NewManager(
 	}
 }
 
+// GenerateToken génère un JWT signé avec HS256.
 func (m *Manager) GenerateToken(
 	userID int,
 	matricule string,
 	role string,
 ) (string, error) {
 
-	if m.SecretKey == "" {
-		return "", errors.New("JWT secret key is required")
+	if strings.TrimSpace(m.SecretKey) == "" {
+		return "", ErrSecretKeyRequired
 	}
 
 	if m.TokenDuration <= 0 {
-		return "", errors.New("JWT token duration must be greater than zero")
+		return "", ErrTokenDurationInvalid
+	}
+
+	if userID <= 0 {
+		return "", errors.New("invalid user ID")
+	}
+
+	matricule = strings.TrimSpace(matricule)
+	role = strings.TrimSpace(role)
+
+	if matricule == "" {
+		return "", errors.New("matricule is required")
+	}
+
+	if role == "" {
+		return "", errors.New("role is required")
 	}
 
 	now := time.Now()
@@ -50,7 +75,6 @@ func (m *Manager) GenerateToken(
 		UserID:    userID,
 		Matricule: matricule,
 		Role:      role,
-
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(
 				now.Add(m.TokenDuration),
@@ -69,25 +93,25 @@ func (m *Manager) GenerateToken(
 	return token.SignedString([]byte(m.SecretKey))
 }
 
+// ValidateToken vérifie et décode un JWT.
 func (m *Manager) ValidateToken(
 	tokenString string,
 ) (*Claims, error) {
 
-	if tokenString == "" {
-		return nil, errors.New("token is required")
+	if strings.TrimSpace(tokenString) == "" {
+		return nil, ErrTokenRequired
 	}
 
-	if m.SecretKey == "" {
-		return nil, errors.New("JWT secret key is required")
+	if strings.TrimSpace(m.SecretKey) == "" {
+		return nil, ErrSecretKeyRequired
 	}
 
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&Claims{},
 		func(token *jwt.Token) (interface{}, error) {
-
 			if token.Method != jwt.SigningMethodHS256 {
-				return nil, errors.New("unexpected signing method")
+				return nil, ErrUnexpectedMethod
 			}
 
 			return []byte(m.SecretKey), nil
@@ -95,16 +119,16 @@ func (m *Manager) ValidateToken(
 	)
 
 	if err != nil {
-		return nil, errors.New("invalid token")
+		return nil, ErrInvalidToken
 	}
 
 	if !token.Valid {
-		return nil, errors.New("invalid token")
+		return nil, ErrInvalidToken
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
-		return nil, errors.New("invalid token claims")
+		return nil, ErrInvalidToken
 	}
 
 	return claims, nil

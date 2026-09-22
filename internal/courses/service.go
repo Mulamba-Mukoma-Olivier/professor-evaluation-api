@@ -1,6 +1,9 @@
 package courses
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 type Service struct {
 	repository *Repository
@@ -24,9 +27,12 @@ func (s *Service) GetByID(id int) (*Course, error) {
 	return s.repository.GetByID(id)
 }
 
-func (s *Service) Create(
-	request CreateCourseRequest,
-) (*Course, error) {
+func (s *Service) Create(request CreateCourseRequest) (*Course, error) {
+	request.Code = strings.TrimSpace(request.Code)
+	request.Name = strings.TrimSpace(request.Name)
+	request.Description = strings.TrimSpace(request.Description)
+	request.Department = strings.TrimSpace(request.Department)
+	request.AcademicYear = strings.TrimSpace(request.AcademicYear)
 
 	if request.Code == "" {
 		return nil, errors.New("course code is required")
@@ -59,10 +65,15 @@ func (s *Service) Update(
 	id int,
 	request UpdateCourseRequest,
 ) (*Course, error) {
-
 	if id <= 0 {
 		return nil, errors.New("invalid course ID")
 	}
+
+	request.Code = strings.TrimSpace(request.Code)
+	request.Name = strings.TrimSpace(request.Name)
+	request.Description = strings.TrimSpace(request.Description)
+	request.Department = strings.TrimSpace(request.Department)
+	request.AcademicYear = strings.TrimSpace(request.AcademicYear)
 
 	if request.Code == "" {
 		return nil, errors.New("course code is required")

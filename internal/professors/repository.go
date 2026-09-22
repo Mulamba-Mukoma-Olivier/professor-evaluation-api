@@ -6,6 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var ErrProfessorNotFound = errors.New("professor not found")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -40,7 +42,10 @@ func (r *Repository) GetAllPaginated(page, pageSize int) ([]Professor, int, erro
 	}
 
 	// Get paginated results
-	result := r.db.Offset(offset).Limit(pageSize).Find(&professors)
+	result := r.db.
+		Offset(offset).
+		Limit(pageSize).
+		Find(&professors)
 
 	if result.Error != nil {
 		return nil, 0, result.Error
@@ -83,7 +88,7 @@ func (r *Repository) GetByID(id int) (*Professor, error) {
 	result := r.db.First(&professor, id)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("professor not found")
+		return nil, ErrProfessorNotFound
 	}
 
 	if result.Error != nil {
@@ -113,7 +118,7 @@ func (r *Repository) Update(
 	result := r.db.First(&existingProfessor, id)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("professor not found")
+		return nil, ErrProfessorNotFound
 	}
 
 	if result.Error != nil {
@@ -146,7 +151,7 @@ func (r *Repository) Delete(id int) error {
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("professor not found")
+		return ErrProfessorNotFound
 	}
 
 	return nil

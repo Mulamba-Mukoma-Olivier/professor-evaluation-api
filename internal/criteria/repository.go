@@ -6,6 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var ErrCriterionNotFound = errors.New("criterion not found")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -19,10 +21,8 @@ func NewRepository(db *gorm.DB) *Repository {
 func (r *Repository) GetAll() ([]Criterion, error) {
 	var criteria []Criterion
 
-	result := r.db.Find(&criteria)
-
-	if result.Error != nil {
-		return nil, result.Error
+	if err := r.db.Find(&criteria).Error; err != nil {
+		return nil, err
 	}
 
 	return criteria, nil
@@ -31,12 +31,10 @@ func (r *Repository) GetAll() ([]Criterion, error) {
 func (r *Repository) GetActive() ([]Criterion, error) {
 	var criteria []Criterion
 
-	result := r.db.
+	if err := r.db.
 		Where("active = ?", true).
-		Find(&criteria)
-
-	if result.Error != nil {
-		return nil, result.Error
+		Find(&criteria).Error; err != nil {
+		return nil, err
 	}
 
 	return criteria, nil
@@ -48,7 +46,7 @@ func (r *Repository) GetByID(id int) (*Criterion, error) {
 	result := r.db.First(&criterion, id)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("criterion not found")
+		return nil, ErrCriterionNotFound
 	}
 
 	if result.Error != nil {
@@ -59,10 +57,8 @@ func (r *Repository) GetByID(id int) (*Criterion, error) {
 }
 
 func (r *Repository) Create(criterion Criterion) (*Criterion, error) {
-	result := r.db.Create(&criterion)
-
-	if result.Error != nil {
-		return nil, result.Error
+	if err := r.db.Create(&criterion).Error; err != nil {
+		return nil, err
 	}
 
 	return &criterion, nil
@@ -74,7 +70,7 @@ func (r *Repository) Update(id int, criterion Criterion) (*Criterion, error) {
 	result := r.db.First(&existingCriterion, id)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("criterion not found")
+		return nil, ErrCriterionNotFound
 	}
 
 	if result.Error != nil {
@@ -86,10 +82,8 @@ func (r *Repository) Update(id int, criterion Criterion) (*Criterion, error) {
 	existingCriterion.MaxScore = criterion.MaxScore
 	existingCriterion.Active = criterion.Active
 
-	result = r.db.Save(&existingCriterion)
-
-	if result.Error != nil {
-		return nil, result.Error
+	if err := r.db.Save(&existingCriterion).Error; err != nil {
+		return nil, err
 	}
 
 	return &existingCriterion, nil
@@ -103,7 +97,7 @@ func (r *Repository) Delete(id int) error {
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("criterion not found")
+		return ErrCriterionNotFound
 	}
 
 	return nil

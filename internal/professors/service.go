@@ -1,12 +1,35 @@
 package professors
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
-type Service struct {
-	repository *Repository
+var (
+	ErrInvalidProfessorID       = errors.New("invalid professor ID")
+	ErrProfessorMatriculeRequired = errors.New("professor matricule is required")
+	ErrFirstNameRequired        = errors.New("first name is required")
+	ErrLastNameRequired         = errors.New("last name is required")
+	ErrDepartmentRequired       = errors.New("department is required")
+	ErrInvalidProfessorStatus   = errors.New("invalid professor status")
+)
+
+type ProfessorRepository interface {
+	GetAll() ([]Professor, error)
+	GetAllPaginated(page, pageSize int) ([]Professor, int, error)
+	GetActive() ([]Professor, error)
+	GetByStatus(status string) ([]Professor, error)
+	GetByID(id int) (*Professor, error)
+	Create(professor Professor) (*Professor, error)
+	Update(id int, professor Professor) (*Professor, error)
+	Delete(id int) error
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository ProfessorRepository
+}
+
+func NewService(repository ProfessorRepository) *Service {
 	return &Service{
 		repository: repository,
 	}
@@ -17,6 +40,14 @@ func (s *Service) GetAll() ([]Professor, error) {
 }
 
 func (s *Service) GetAllPaginated(page, pageSize int) ([]Professor, int, error) {
+	if page <= 0 {
+		page = 1
+	}
+
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
 	return s.repository.GetAllPaginated(page, pageSize)
 }
 
@@ -25,13 +56,22 @@ func (s *Service) GetActive() ([]Professor, error) {
 }
 
 func (s *Service) GetByStatus(status string) ([]Professor, error) {
+	status = strings.TrimSpace(status)
+
+	if status == "" {
+		return nil, ErrInvalidProfessorStatus
+	}
+
+	if !isValidStatus(status) {
+		return nil, ErrInvalidProfessorStatus
+	}
+
 	return s.repository.GetByStatus(status)
 }
 
 func (s *Service) GetByID(id int) (*Professor, error) {
-
 	if id <= 0 {
-		return nil, errors.New("invalid professor ID")
+		return nil, ErrInvalidProfessorID
 	}
 
 	return s.repository.GetByID(id)
@@ -41,34 +81,38 @@ func (s *Service) Create(
 	request CreateProfessorRequest,
 ) (*Professor, error) {
 
+	request.Matricule = strings.TrimSpace(request.Matricule)
+	request.FirstName = strings.TrimSpace(request.FirstName)
+	request.LastName = strings.TrimSpace(request.LastName)
+	request.Email = strings.TrimSpace(request.Email)
+	request.Department = strings.TrimSpace(request.Department)
+	request.Grade = strings.TrimSpace(request.Grade)
+	request.Status = strings.TrimSpace(request.Status)
+
 	if request.Matricule == "" {
-		return nil, errors.New(
-			"professor matricule is required",
-		)
+		return nil, ErrProfessorMatriculeRequired
 	}
 
 	if request.FirstName == "" {
-		return nil, errors.New(
-			"first name is required",
-		)
+		return nil, ErrFirstNameRequired
 	}
 
 	if request.LastName == "" {
-		return nil, errors.New(
-			"last name is required",
-		)
+		return nil, ErrLastNameRequired
 	}
 
 	if request.Department == "" {
-		return nil, errors.New(
-			"department is required",
-		)
+		return nil, ErrDepartmentRequired
 	}
 
-	// Set default status if not provided
 	status := request.Status
+
 	if status == "" {
 		status = "active"
+	}
+
+	if !isValidStatus(status) {
+		return nil, ErrInvalidProfessorStatus
 	}
 
 	professor := Professor{
@@ -78,7 +122,7 @@ func (s *Service) Create(
 		Email:      request.Email,
 		Department: request.Department,
 		Grade:      request.Grade,
-		Active:     true,
+		Active:     status == "active",
 		Status:     status,
 	}
 
@@ -91,31 +135,45 @@ func (s *Service) Update(
 ) (*Professor, error) {
 
 	if id <= 0 {
-		return nil, errors.New("invalid professor ID")
+		return nil, ErrInvalidProfessorID
 	}
 
+	request.Matricule = strings.TrimSpace(request.Matricule)
+	request.FirstName = strings.TrimSpace(request.FirstName)
+	request.LastName = strings.TrimSpace(request.LastName)
+	request.Email = strings.TrimSpace(request.Email)
+	request.Department = strings.TrimSpace(request.Department)
+	request.Grade = strings.TrimSpace(request.Grade)
+	request.Status = strings.TrimSpace(request.Status)
+
 	if request.Matricule == "" {
-		return nil, errors.New(
-			"professor matricule is required",
-		)
+		return nil, ErrProfessorMatriculeRequired
 	}
 
 	if request.FirstName == "" {
-		return nil, errors.New(
-			"first name is required",
-		)
+		return nil, ErrFirstNameRequired
 	}
 
 	if request.LastName == "" {
-		return nil, errors.New(
-			"last name is required",
-		)
+		return nil, ErrLastNameRequired
 	}
 
 	if request.Department == "" {
-		return nil, errors.New(
-			"department is required",
-		)
+		return nil, ErrDepartmentRequired
+	}
+
+	status := request.Status
+
+	if status == "" {
+		if request.Active {
+			status = "active"
+		} else {
+			status = "inactive"
+		}
+	}
+
+	if !isValidStatus(status) {
+		return nil, ErrInvalidProfessorStatus
 	}
 
 	professor := Professor{
@@ -126,17 +184,25 @@ func (s *Service) Update(
 		Department: request.Department,
 		Grade:      request.Grade,
 		Active:     request.Active,
-		Status:     request.Status,
+		Status:     status,
 	}
 
 	return s.repository.Update(id, professor)
 }
 
 func (s *Service) Delete(id int) error {
-
 	if id <= 0 {
-		return errors.New("invalid professor ID")
+		return ErrInvalidProfessorID
 	}
 
 	return s.repository.Delete(id)
+}
+
+func isValidStatus(status string) bool {
+	switch status {
+	case "active", "inactive", "on_leave", "retired":
+		return true
+	default:
+		return false
+	}
 }

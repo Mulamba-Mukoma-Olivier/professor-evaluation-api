@@ -2,11 +2,15 @@ package eligibility
 
 import "errors"
 
-type Service struct {
-	repository *Repository
+type EligibilityRepository interface {
+	GetByStudentID(studentID int) (*Eligibility, error)
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository EligibilityRepository
+}
+
+func NewService(repository EligibilityRepository) *Service {
 	return &Service{
 		repository: repository,
 	}
@@ -18,7 +22,6 @@ func (s *Service) Check(studentID int) (*Eligibility, error) {
 	}
 
 	eligibility, err := s.repository.GetByStudentID(studentID)
-
 	if err != nil {
 		return nil, err
 	}

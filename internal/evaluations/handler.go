@@ -1,32 +1,31 @@
 package evaluations
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service *Service
+type EvaluationService interface {
+	Create(studentID int, request CreateEvaluationRequest) (*Evaluation, error)
+	GetAll() ([]Evaluation, error)
+	GetByID(id int) (*Evaluation, error)
 }
 
-func NewHandler(service *Service) *Handler {
+type Handler struct {
+	service EvaluationService
+}
+
+func NewHandler(service EvaluationService) *Handler {
 	return &Handler{
 		service: service,
 	}
 }
 
+// Create crée une évaluation pour l'étudiant authentifié.
 func (h *Handler) Create(c *gin.Context) {
-	studentID, err := strconv.Atoi(c.Param("student_id"))
-
-	if err != nil || studentID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "invalid student ID",
-		})
-		return
-	}
-
 	var request CreateEvaluationRequest
 
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -36,9 +35,33 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
+	// Récupération de l'ID de l'étudiant depuis le JWT.
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "user not authenticated",
+		})
+		return
+	}
+
+	studentID, ok := userID.(int)
+	if !ok || studentID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "invalid user ID",
+		})
+		return
+	}
+
 	evaluation, err := h.service.Create(studentID, request)
 
 	if err != nil {
+		if errors.Is(err, ErrEvaluationNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "required resource not found",
+			})
+			return
+		}
+
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
@@ -53,7 +76,7 @@ func (h *Handler) GetAll(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
+			"error": "internal server error",
 		})
 		return
 	}
@@ -76,8 +99,15 @@ func (h *Handler) GetByID(c *gin.Context) {
 	evaluation, err := h.service.GetByID(id)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "evaluation not found",
+		if errors.Is(err, ErrEvaluationNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "evaluation not found",
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
 		})
 		return
 	}

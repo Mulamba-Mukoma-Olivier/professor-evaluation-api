@@ -6,6 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var ErrEligibilityNotFound = errors.New("student eligibility not found")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -24,7 +26,7 @@ func (r *Repository) GetByStudentID(studentID int) (*Eligibility, error) {
 		First(&eligibility)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("student eligibility not found")
+		return nil, ErrEligibilityNotFound
 	}
 
 	if result.Error != nil {

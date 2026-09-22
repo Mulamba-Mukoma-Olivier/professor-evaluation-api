@@ -2,14 +2,42 @@ package evaluations
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
-type Service struct {
-	repository *Repository
+var (
+	ErrInvalidStudentID   = errors.New("invalid student ID")
+	ErrInvalidProfessorID = errors.New("invalid professor ID")
+	ErrInvalidCourseID    = errors.New("invalid course ID")
+	ErrInvalidEvaluationID = errors.New("invalid evaluation ID")
+	ErrAcademicYearRequired = errors.New("academic year is required")
+	ErrPeriodRequired       = errors.New("evaluation period is required")
+	ErrAnswersRequired      = errors.New("evaluation must contain at least one answer")
+	ErrInvalidCriterionID   = errors.New("invalid criterion ID")
+	ErrInvalidScore         = errors.New("score must be between 1 and 5")
+	ErrDuplicateEvaluation = errors.New("student has already evaluated this professor for this course")
+)
+
+type EvaluationRepository interface {
+	Create(evaluation Evaluation) (*Evaluation, error)
+	GetAll() ([]Evaluation, error)
+	GetByID(id int) (*Evaluation, error)
+	Exists(
+		studentID int,
+		professorID int,
+		courseID int,
+		academicYear string,
+		period string,
+	) (bool, error)
+	Delete(id int) error
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository EvaluationRepository
+}
+
+func NewService(repository EvaluationRepository) *Service {
 	return &Service{
 		repository: repository,
 	}
@@ -21,41 +49,41 @@ func (s *Service) Create(
 ) (*Evaluation, error) {
 
 	if studentID <= 0 {
-		return nil, errors.New("invalid student ID")
+		return nil, ErrInvalidStudentID
 	}
 
 	if request.ProfessorID <= 0 {
-		return nil, errors.New("invalid professor ID")
+		return nil, ErrInvalidProfessorID
 	}
 
 	if request.CourseID <= 0 {
-		return nil, errors.New("invalid course ID")
+		return nil, ErrInvalidCourseID
 	}
 
+	request.AcademicYear = strings.TrimSpace(request.AcademicYear)
 	if request.AcademicYear == "" {
-		return nil, errors.New("academic year is required")
+		return nil, ErrAcademicYearRequired
 	}
 
+	request.Period = strings.TrimSpace(request.Period)
 	if request.Period == "" {
-		return nil, errors.New("evaluation period is required")
+		return nil, ErrPeriodRequired
 	}
 
 	if len(request.Answers) == 0 {
-		return nil, errors.New("evaluation must contain at least one answer")
+		return nil, ErrAnswersRequired
 	}
 
-	// Vérification des scores
 	for _, answer := range request.Answers {
 		if answer.CriterionID <= 0 {
-			return nil, errors.New("invalid criterion ID")
+			return nil, ErrInvalidCriterionID
 		}
 
 		if answer.Score < 1 || answer.Score > 5 {
-			return nil, errors.New("score must be between 1 and 5")
+			return nil, ErrInvalidScore
 		}
 	}
 
-	// Empêcher une double évaluation
 	exists, err := s.repository.Exists(
 		studentID,
 		request.ProfessorID,
@@ -69,12 +97,9 @@ func (s *Service) Create(
 	}
 
 	if exists {
-		return nil, errors.New(
-			"student has already evaluated this professor for this course",
-		)
+		return nil, ErrDuplicateEvaluation
 	}
 
-	// Conversion des réponses du DTO vers les modèles GORM
 	answers := make([]EvaluationAnswer, 0, len(request.Answers))
 
 	for _, answer := range request.Answers {
@@ -103,7 +128,7 @@ func (s *Service) GetAll() ([]Evaluation, error) {
 
 func (s *Service) GetByID(id int) (*Evaluation, error) {
 	if id <= 0 {
-		return nil, errors.New("invalid evaluation ID")
+		return nil, ErrInvalidEvaluationID
 	}
 
 	return s.repository.GetByID(id)

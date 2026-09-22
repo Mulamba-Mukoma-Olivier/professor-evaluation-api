@@ -31,7 +31,6 @@ type RouterDependencies struct {
 }
 
 func SetupRouter(deps RouterDependencies) *gin.Engine {
-
 	router := gin.Default()
 
 	// =========================================================
@@ -111,18 +110,18 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 		middleware.AuthRequired(deps.JWTManager),
 	)
 
-	// ---------------------------------------------------------
-	// Eligibility
-	// ---------------------------------------------------------
+	// =========================================================
+	// ELIGIBILITY
+	// =========================================================
 
 	protected.GET(
 		"/eligibility/:student_id",
 		deps.Eligibility.Check,
 	)
 
-	// ---------------------------------------------------------
-	// Professors
-	// ---------------------------------------------------------
+	// =========================================================
+	// PROFESSORS
+	// =========================================================
 
 	protected.GET(
 		"/professors",
@@ -166,9 +165,9 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 		deps.ProfessorHandler.Delete,
 	)
 
-	// ---------------------------------------------------------
-	// Courses
-	// ---------------------------------------------------------
+	// =========================================================
+	// COURSES
+	// =========================================================
 
 	protected.GET(
 		"/courses",
@@ -188,9 +187,21 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 		deps.CourseHandler.Create,
 	)
 
-	// ---------------------------------------------------------
-	// Criteria
-	// ---------------------------------------------------------
+	protected.PUT(
+		"/courses/:id",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN"),
+		deps.CourseHandler.Update,
+	)
+
+	protected.DELETE(
+		"/courses/:id",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN"),
+		deps.CourseHandler.Delete,
+	)
+
+	// =========================================================
+	// CRITERIA
+	// =========================================================
 
 	protected.GET(
 		"/criteria",
@@ -228,9 +239,9 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 		deps.CriteriaHandler.Delete,
 	)
 
-	// ---------------------------------------------------------
-	// Evaluations
-	// ---------------------------------------------------------
+	// =========================================================
+	// EVALUATIONS
+	// =========================================================
 
 	protected.GET(
 		"/evaluations",
@@ -245,14 +256,14 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 	)
 
 	protected.POST(
-		"/evaluations/:student_id",
+		"/evaluations",
 		middleware.RequireRole("STUDENT"),
 		deps.Evaluation.Create,
 	)
 
-	// ---------------------------------------------------------
-	// Results
-	// ---------------------------------------------------------
+	// =========================================================
+	// RESULTS
+	// =========================================================
 
 	protected.GET(
 		"/results/professors/:professor_id",

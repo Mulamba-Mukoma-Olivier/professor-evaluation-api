@@ -17,17 +17,17 @@ type Evaluation struct {
 
 // EvaluationAnswer représente la note donnée à un critère.
 type EvaluationAnswer struct {
-	ID int `json:"id" gorm:"primaryKey"`
+	ID           int `json:"id" gorm:"primaryKey"`
 	EvaluationID int `json:"evaluation_id" gorm:"not null"`
-	CriterionID int `json:"criterion_id" gorm:"not null"`
-	Score int `json:"score" gorm:"not null"`
+	CriterionID  int `json:"criterion_id" gorm:"not null"`
+	Score        int `json:"score" gorm:"not null"`
 }
 
 // Answer représente une réponse envoyée lors de la création
 // d'une évaluation.
 type Answer struct {
-	CriterionID int `json:"criterion_id"`
-	Score       int `json:"score"`
+	CriterionID int `json:"criterion_id" binding:"required"`
+	Score       int `json:"score" binding:"required,min=1,max=5"`
 }
 
 // CreateEvaluationRequest représente les données nécessaires
@@ -37,5 +37,5 @@ type CreateEvaluationRequest struct {
 	CourseID     int      `json:"course_id" binding:"required"`
 	AcademicYear string   `json:"academic_year" binding:"required"`
 	Period       string   `json:"period" binding:"required"`
-	Answers      []Answer `json:"answers" binding:"required"`
+	Answers      []Answer `json:"answers" binding:"required,min=1"`
 }

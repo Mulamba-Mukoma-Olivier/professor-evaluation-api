@@ -6,6 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var ErrEvaluationNotFound = errors.New("evaluation not found")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -18,17 +20,16 @@ func NewRepository(db *gorm.DB) *Repository {
 
 func (r *Repository) Create(evaluation Evaluation) (*Evaluation, error) {
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-
-		// Création de l'évaluation
+		// Création de l'évaluation.
 		if err := tx.Create(&evaluation).Error; err != nil {
 			return err
 		}
 
-		// Création des réponses
-		for _, answer := range evaluation.Answers {
-			answer.EvaluationID = evaluation.ID
+		// Création des réponses.
+		for i := range evaluation.Answers {
+			evaluation.Answers[i].EvaluationID = evaluation.ID
 
-			if err := tx.Create(&answer).Error; err != nil {
+			if err := tx.Create(&evaluation.Answers[i]).Error; err != nil {
 				return err
 			}
 		}
@@ -40,7 +41,7 @@ func (r *Repository) Create(evaluation Evaluation) (*Evaluation, error) {
 		return nil, err
 	}
 
-	// Recharge l'évaluation avec ses réponses
+	// Recharge l'évaluation avec ses réponses.
 	if err := r.db.
 		Preload("Answers").
 		First(&evaluation, evaluation.ID).Error; err != nil {
@@ -72,7 +73,7 @@ func (r *Repository) GetByID(id int) (*Evaluation, error) {
 		First(&evaluation, id)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("evaluation not found")
+		return nil, ErrEvaluationNotFound
 	}
 
 	if result.Error != nil {
@@ -89,7 +90,6 @@ func (r *Repository) Exists(
 	academicYear string,
 	period string,
 ) (bool, error) {
-
 	var count int64
 
 	result := r.db.
@@ -119,7 +119,7 @@ func (r *Repository) Delete(id int) error {
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("evaluation not found")
+		return ErrEvaluationNotFound
 	}
 
 	return nil

@@ -17,8 +17,8 @@ type Config struct {
 	SSLMode  string
 }
 
+// NewPostgresDB crée une connexion GORM vers PostgreSQL.
 func NewPostgresDB(cfg Config) (*gorm.DB, error) {
-
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host,
@@ -33,7 +33,6 @@ func NewPostgresDB(cfg Config) (*gorm.DB, error) {
 		postgres.Open(dsn),
 		&gorm.Config{},
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to connect to database: %w",
@@ -41,9 +40,8 @@ func NewPostgresDB(cfg Config) (*gorm.DB, error) {
 		)
 	}
 
-	// Récupérer le *sql.DB sous-jacent
+	// Récupérer la connexion SQL sous-jacente.
 	sqlDB, err := db.DB()
-
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get database instance: %w",
@@ -51,14 +49,15 @@ func NewPostgresDB(cfg Config) (*gorm.DB, error) {
 		)
 	}
 
-	// Configuration du pool de connexions
+	// Configuration du pool de connexions.
 	sqlDB.SetMaxOpenConns(10)
 	sqlDB.SetMaxIdleConns(2)
 	sqlDB.SetConnMaxLifetime(time.Hour)
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
-	// Vérifier la connexion
+	// Vérifier que PostgreSQL est réellement accessible.
 	if err := sqlDB.Ping(); err != nil {
-		sqlDB.Close()
+		_ = sqlDB.Close()
 
 		return nil, fmt.Errorf(
 			"failed to ping database: %w",

@@ -12,7 +12,7 @@ import (
 
 func TestNewRateLimiter(t *testing.T) {
 	rl := NewRateLimiter(10, time.Minute)
-	
+
 	assert.NotNil(t, rl)
 	assert.Equal(t, 10, rl.rate)
 	assert.Equal(t, time.Minute, rl.window)
@@ -20,75 +20,187 @@ func TestNewRateLimiter(t *testing.T) {
 
 func TestRateLimiter_Middleware_AllowRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
 	rl := NewRateLimiter(5, time.Minute)
-	
+
 	router := gin.New()
 	router.Use(rl.Middleware())
+
 	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		c.JSON(http.StatusOK, gin.H{
+			"message": "ok",
+		})
 	})
-	
-	// Make 5 requests (should all succeed)
+
+	// Les 5 premières requêtes doivent être acceptées.
 	for i := 0; i < 5; i++ {
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.RemoteAddr = "127.0.0.1"
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+
 		w := httptest.NewRecorder()
+
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
 	}
 }
 
 func TestRateLimiter_Middleware_BlockExcessRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
 	rl := NewRateLimiter(2, time.Minute)
-	
+
 	router := gin.New()
 	router.Use(rl.Middleware())
+
 	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		c.JSON(http.StatusOK, gin.H{
+			"message": "ok",
+		})
 	})
-	
-	// Make 2 requests (should succeed)
+
+	// Deux premières requêtes acceptées.
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest("GET", "/test", nil)
-		req.RemoteAddr = "127.0.0.1"
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "127.0.0.1:12345"
+
 		w := httptest.NewRecorder()
+
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
 	}
-	
-	// Make 3rd request (should be blocked)
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.RemoteAddr = "127.0.0.1"
+
+	// Troisième requête bloquée.
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+
 	w := httptest.NewRecorder()
+
 	router.ServeHTTP(w, req)
-	
+
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }
 
 func TestRateLimiter_Middleware_DifferentIPs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
 	rl := NewRateLimiter(2, time.Minute)
-	
+
 	router := gin.New()
 	router.Use(rl.Middleware())
+
 	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		c.JSON(http.StatusOK, gin.H{
+			"message": "ok",
+		})
 	})
-	
-	// First IP - should succeed
-	req1 := httptest.NewRequest("GET", "/test", nil)
+
+	// Première IP.
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
 	req1.RemoteAddr = "127.0.0.1:12345"
+
+	w1 := httptest.NewRecorder()
+
+	router.ServeHTTP(w1, req1)
+
+	assert.Equal(t, http.StatusOK, w1.Code)
+
+	// Deuxième IP.
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.RemoteAddr = "127.0.0.2:12345"
+
+	w2 := httptest.NewRecorder()
+
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusOK, w2.Code)
+}
+
+func TestRateLimiter_Middleware_BlockOnlyOneIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rl := NewRateLimiter(1, time.Minute)
+
+	router := gin.New()
+	router.Use(rl.Middleware())
+
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "ok",
+		})
+	})
+
+	// Première IP : première requête acceptée.
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req1.RemoteAddr = "127.0.0.1:12345"
+
 	w1 := httptest.NewRecorder()
 	router.ServeHTTP(w1, req1)
+
 	assert.Equal(t, http.StatusOK, w1.Code)
-	
-	// Second IP - should also succeed
-	req2 := httptest.NewRequest("GET", "/test", nil)
-	req2.RemoteAddr = "127.0.0.2:12345"
+
+	// Première IP : deuxième requête bloquée.
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.RemoteAddr = "127.0.0.1:12345"
+
 	w2 := httptest.NewRecorder()
 	router.ServeHTTP(w2, req2)
-	assert.Equal(t, http.StatusOK, w2.Code)
+
+	assert.Equal(t, http.StatusTooManyRequests, w2.Code)
+
+	// Deuxième IP : doit toujours être autorisée.
+	req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req3.RemoteAddr = "127.0.0.2:12345"
+
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, req3)
+
+	assert.Equal(t, http.StatusOK, w3.Code)
+}
+
+func TestRateLimiter_Middleware_WindowExpires(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Fenêtre très courte pour le test.
+	rl := NewRateLimiter(1, 50*time.Millisecond)
+
+	router := gin.New()
+	router.Use(rl.Middleware())
+
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "ok",
+		})
+	})
+
+	// Première requête acceptée.
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req1.RemoteAddr = "127.0.0.1:12345"
+
+	w1 := httptest.NewRecorder()
+	router.ServeHTTP(w1, req1)
+
+	assert.Equal(t, http.StatusOK, w1.Code)
+
+	// Deuxième requête immédiatement bloquée.
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.RemoteAddr = "127.0.0.1:12345"
+
+	w2 := httptest.NewRecorder()
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusTooManyRequests, w2.Code)
+
+	// Attendre l'expiration de la fenêtre.
+	time.Sleep(60 * time.Millisecond)
+
+	// Une nouvelle requête doit être acceptée.
+	req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req3.RemoteAddr = "127.0.0.1:12345"
+
+	w3 := httptest.NewRecorder()
+	router.ServeHTTP(w3, req3)
+
+	assert.Equal(t, http.StatusOK, w3.Code)
 }

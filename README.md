@@ -17,3 +17,6 @@
 * POST `/evaluations/:student_id`
 * GET `/results/professors/:professor_id`
 * GET `/eligibility/:student_id`
+* POST `/students/:student_id/evaluations`
+* GET `/evaluations`
+* GET `/evaluations/:id`

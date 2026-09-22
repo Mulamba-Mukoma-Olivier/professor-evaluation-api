@@ -6,6 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var ErrCourseNotFound = errors.New("course not found")
+
 type Repository struct {
 	db *gorm.DB
 }
@@ -19,10 +21,8 @@ func NewRepository(db *gorm.DB) *Repository {
 func (r *Repository) GetAll() ([]Course, error) {
 	var courses []Course
 
-	result := r.db.Find(&courses)
-
-	if result.Error != nil {
-		return nil, result.Error
+	if err := r.db.Find(&courses).Error; err != nil {
+		return nil, err
 	}
 
 	return courses, nil
@@ -34,7 +34,7 @@ func (r *Repository) GetByID(id int) (*Course, error) {
 	result := r.db.First(&course, id)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("course not found")
+		return nil, ErrCourseNotFound
 	}
 
 	if result.Error != nil {
@@ -45,10 +45,8 @@ func (r *Repository) GetByID(id int) (*Course, error) {
 }
 
 func (r *Repository) Create(course Course) (*Course, error) {
-	result := r.db.Create(&course)
-
-	if result.Error != nil {
-		return nil, result.Error
+	if err := r.db.Create(&course).Error; err != nil {
+		return nil, err
 	}
 
 	return &course, nil
@@ -60,7 +58,7 @@ func (r *Repository) Update(id int, course Course) (*Course, error) {
 	result := r.db.First(&existingCourse, id)
 
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("course not found")
+		return nil, ErrCourseNotFound
 	}
 
 	if result.Error != nil {
@@ -73,10 +71,8 @@ func (r *Repository) Update(id int, course Course) (*Course, error) {
 	existingCourse.Department = course.Department
 	existingCourse.AcademicYear = course.AcademicYear
 
-	result = r.db.Save(&existingCourse)
-
-	if result.Error != nil {
-		return nil, result.Error
+	if err := r.db.Save(&existingCourse).Error; err != nil {
+		return nil, err
 	}
 
 	return &existingCourse, nil
@@ -90,7 +86,7 @@ func (r *Repository) Delete(id int) error {
 	}
 
 	if result.RowsAffected == 0 {
-		return errors.New("course not found")
+		return ErrCourseNotFound
 	}
 
 	return nil
