@@ -1,0 +1,8 @@
+<RCC>
+  <qresource prefix="images">
+    <file>images/png-transparent-mythical-phoenix-watercolor-resplendent-flaming-phoenix-bird-thumbnail.png</file>
+    <file>images/png-transparent-background-dusk-highway-mountain-thumbnail.png</file>
+    <file>images/images2.jpeg</file>
+    <file>images/images.jpeg</file>
+  </qresource>
+</RCC>

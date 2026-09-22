@@ -11,6 +11,7 @@ type Professor struct {
 	Department   string `json:"department" gorm:"not null"`
 	Grade        string `json:"grade"`
 	Active       bool   `json:"active"`
+	Status       string `json:"status" gorm:"default:'active'"` // active, inactive, on_leave, retired
 	Evaluations []evaluations.Evaluation `json:"evaluations" gorm:"foreignKey:ProfessorID;references:ID"`
 }
 
@@ -21,6 +22,7 @@ type CreateProfessorRequest struct {
 	Email      string `json:"email"`
 	Department string `json:"department" binding:"required"`
 	Grade      string `json:"grade"`
+	Status     string `json:"status" gorm:"default:'active'"`
 }
 
 type UpdateProfessorRequest struct {
@@ -31,4 +33,5 @@ type UpdateProfessorRequest struct {
 	Department string `json:"department" binding:"required"`
 	Grade      string `json:"grade"`
 	Active     bool   `json:"active"`
+	Status     string `json:"status"`
 }

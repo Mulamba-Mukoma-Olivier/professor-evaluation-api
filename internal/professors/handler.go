@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/pagination"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,7 +19,23 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) GetAll(c *gin.Context) {
-	professors, err := h.service.GetAll()
+	page, pageSize := pagination.GetPagination(c)
+	
+	professors, total, err := h.service.GetAllPaginated(page, pageSize)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	response := pagination.BuildResponse(professors, page, pageSize, total)
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *Handler) GetActive(c *gin.Context) {
+	professors, err := h.service.GetActive()
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -32,8 +49,16 @@ func (h *Handler) GetAll(c *gin.Context) {
 	})
 }
 
-func (h *Handler) GetActive(c *gin.Context) {
-	professors, err := h.service.GetActive()
+func (h *Handler) GetByStatus(c *gin.Context) {
+	status := c.Query("status")
+	if status == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "status parameter is required",
+		})
+		return
+	}
+
+	professors, err := h.service.GetByStatus(status)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

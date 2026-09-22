@@ -55,7 +55,7 @@ func main() {
 	// 3. Migration GORM
 	// =========================================================
 
-	if err := database.Migrate(db); err != nil {
+	if err := database.RunMigrations(dbConfig); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
 	}
 
@@ -94,7 +94,6 @@ func main() {
 
 	authService := auth.NewService(
 		userRepository,
-		jwtManager,
 	)
 
 	professorService := professors.NewService(
@@ -127,6 +126,7 @@ func main() {
 
 	authHandler := auth.NewHandler(
 		authService,
+		jwtManager,
 	)
 
 	professorHandler := professors.NewHandler(

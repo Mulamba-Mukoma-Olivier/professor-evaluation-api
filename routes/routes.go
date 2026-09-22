@@ -75,6 +75,13 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 	}
 
 	// =========================================================
+	// RATE LIMITING
+	// =========================================================
+
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute)
+	router.Use(rateLimiter.Middleware())
+
+	// =========================================================
 	// HEALTH CHECK
 	// =========================================================
 
@@ -119,16 +126,25 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 
 	protected.GET(
 		"/professors",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.ProfessorHandler.GetAll,
 	)
 
 	protected.GET(
 		"/professors/active",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.ProfessorHandler.GetActive,
 	)
 
 	protected.GET(
+		"/professors/by-status",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
+		deps.ProfessorHandler.GetByStatus,
+	)
+
+	protected.GET(
 		"/professors/:id",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.ProfessorHandler.GetByID,
 	)
 
@@ -156,11 +172,13 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 
 	protected.GET(
 		"/courses",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.CourseHandler.GetAll,
 	)
 
 	protected.GET(
 		"/courses/:id",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.CourseHandler.GetByID,
 	)
 
@@ -176,16 +194,19 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 
 	protected.GET(
 		"/criteria",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.CriteriaHandler.GetAll,
 	)
 
 	protected.GET(
 		"/criteria/active",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.CriteriaHandler.GetActive,
 	)
 
 	protected.GET(
 		"/criteria/:id",
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.CriteriaHandler.GetByID,
 	)
 
@@ -235,7 +256,7 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 
 	protected.GET(
 		"/results/professors/:professor_id",
-		middleware.RequireRole("ADMIN", "SUPER_ADMIN"),
+		middleware.RequireRole("ADMIN", "SUPER_ADMIN", "PROFESSOR"),
 		deps.ResultHandler.GetProfessorResult,
 	)
 

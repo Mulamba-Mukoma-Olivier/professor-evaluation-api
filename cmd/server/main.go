@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/auth"
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/internal/courses"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/database"
 	appjwt "github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/jwt"
+	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/pkg/logger"
 
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/routes"
 )
@@ -25,11 +27,22 @@ import (
 func main() {
 
 	// ========================================
+	// LOGGER INITIALIZATION
+	// ========================================
+
+	if err := logger.InitLogger(); err != nil {
+		log.Fatal("failed to initialize logger:", err)
+	}
+	defer logger.Sync()
+
+	logger.Info("Starting Professor Evaluation API")
+
+	// ========================================
 	// ENVIRONMENT
 	// ========================================
 
 	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: .env file not found")
+		logger.Warn(".env file not found")
 	}
 
 	// ========================================
@@ -53,20 +66,22 @@ func main() {
 
 	db, err := database.NewPostgresDB(dbConfig)
 	if err != nil {
-		log.Fatal("failed to connect to database:", err)
+		logger.Fatal("failed to connect to database", 
+			zap.String("error", err.Error()))
 	}
 
-	log.Println("PostgreSQL connected successfully")
+	logger.Info("PostgreSQL connected successfully")
 
 	// ========================================
 	// DATABASE MIGRATION
 	// ========================================
 
-	if err := database.Migrate(db); err != nil {
-		log.Fatal("failed to migrate database:", err)
+	if err := database.RunMigrations(dbConfig); err != nil {
+		logger.Fatal("failed to run database migrations",
+			zap.String("error", err.Error()))
 	}
 
-	log.Println("Database migration completed")
+	logger.Info("Database migrations completed")
 
 	// ========================================
 	// JWT
@@ -75,7 +90,7 @@ func main() {
 	jwtSecret := os.Getenv("JWT_SECRET")
 
 	if jwtSecret == "" {
-		log.Fatal("JWT_SECRET is required")
+		logger.Fatal("JWT_SECRET is required")
 	}
 
 	jwtManager := appjwt.NewManager(
@@ -87,7 +102,7 @@ func main() {
 	// AUTH
 	// ========================================
 
-	authRepository := auth.NewRepository()
+	authRepository := auth.NewRepository(db)
 
 	authService := auth.NewService(
 		authRepository,
@@ -205,13 +220,13 @@ func main() {
 
 	port := getEnv("PORT", "8080")
 
-	log.Println("========================================")
-	log.Println("Professor Evaluation API")
-	log.Printf("Server running on http://localhost:%s", port)
-	log.Println("========================================")
+	logger.Info("Server starting",
+		zap.String("port", port),
+		zap.String("host", "localhost"))
 
 	if err := router.Run(":" + port); err != nil {
-		log.Fatal(err)
+		logger.Fatal("Server failed to start",
+			zap.String("error", err.Error()))
 	}
 }
 

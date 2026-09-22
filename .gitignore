@@ -47,6 +47,9 @@ go.work.sum
 *.dump
 *.backup
 
+# Allow migration files
+!migrations/*.sql
+
 # ==========================================
 # Logs
 # ==========================================

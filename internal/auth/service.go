@@ -55,9 +55,20 @@ func (s *Service) Register(request RegisterRequest) (*User, error) {
 		return nil, errors.New("invalid email")
 	}
 
-	// default role
-	if strings.TrimSpace(request.Role) == "" {
+	// validate and set default role
+	allowedRoles := map[string]bool{
+		"STUDENT":   true,
+		"PROFESSOR": true,
+		"ADMIN":     true,
+	}
+
+	request.Role = strings.ToUpper(strings.TrimSpace(request.Role))
+	if request.Role == "" {
 		request.Role = "STUDENT"
+	}
+
+	if !allowedRoles[request.Role] {
+		return nil, errors.New("invalid role. Allowed roles: STUDENT, PROFESSOR, ADMIN")
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(request.Password), bcrypt.DefaultCost)

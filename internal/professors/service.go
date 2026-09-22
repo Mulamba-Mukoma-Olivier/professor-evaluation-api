@@ -16,8 +16,16 @@ func (s *Service) GetAll() ([]Professor, error) {
 	return s.repository.GetAll()
 }
 
+func (s *Service) GetAllPaginated(page, pageSize int) ([]Professor, int, error) {
+	return s.repository.GetAllPaginated(page, pageSize)
+}
+
 func (s *Service) GetActive() ([]Professor, error) {
 	return s.repository.GetActive()
+}
+
+func (s *Service) GetByStatus(status string) ([]Professor, error) {
+	return s.repository.GetByStatus(status)
 }
 
 func (s *Service) GetByID(id int) (*Professor, error) {
@@ -57,6 +65,12 @@ func (s *Service) Create(
 		)
 	}
 
+	// Set default status if not provided
+	status := request.Status
+	if status == "" {
+		status = "active"
+	}
+
 	professor := Professor{
 		Matricule:  request.Matricule,
 		FirstName:  request.FirstName,
@@ -65,6 +79,7 @@ func (s *Service) Create(
 		Department: request.Department,
 		Grade:      request.Grade,
 		Active:     true,
+		Status:     status,
 	}
 
 	return s.repository.Create(professor)
@@ -111,6 +126,7 @@ func (s *Service) Update(
 		Department: request.Department,
 		Grade:      request.Grade,
 		Active:     request.Active,
+		Status:     request.Status,
 	}
 
 	return s.repository.Update(id, professor)
