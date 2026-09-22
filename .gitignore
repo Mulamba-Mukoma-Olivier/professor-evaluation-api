@@ -63,7 +63,7 @@ logs/
 
 node_modules/
 frontend/node_modules/
-./application/*.ui
+application/*.ui
 
 # Vite
 frontend/dist/
