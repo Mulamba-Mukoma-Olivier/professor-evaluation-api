@@ -12,7 +12,11 @@ import (
 	"gorm.io/gorm"
 )
 
-func setupEvaluationRepositoryTest(t *testing.T) (*Repository, sqlmock.Sqlmock, func()) {
+// setupEvaluationRepositoryTest prépare une base GORM
+// simulée avec sqlmock.
+func setupEvaluationRepositoryTest(
+	t *testing.T,
+) (*Repository, sqlmock.Sqlmock, func()) {
 	t.Helper()
 
 	sqlDB, mock, err := sqlmock.New()
@@ -28,11 +32,15 @@ func setupEvaluationRepositoryTest(t *testing.T) (*Repository, sqlmock.Sqlmock, 
 	repository := NewRepository(db)
 
 	cleanup := func() {
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	}
 
 	return repository, mock, cleanup
 }
+
+// =========================================================
+// CREATE
+// =========================================================
 
 // ---------------------------------------------------------
 // Create - succès
@@ -46,6 +54,7 @@ func TestRepository_Create_Success(t *testing.T) {
 
 	mock.ExpectBegin()
 
+	// Création de l'évaluation.
 	mock.ExpectQuery(
 		regexp.QuoteMeta(
 			`INSERT INTO "evaluations" ("student_id","professor_id","course_id","academic_year","period","submitted_at") VALUES ($1,$2,$3,$4,$5,$6) RETURNING "id"`,
@@ -63,16 +72,20 @@ func TestRepository_Create_Success(t *testing.T) {
 			sqlmock.NewRows([]string{"id"}).AddRow(1),
 		)
 
-	mock.ExpectExec(
+	// Création de la réponse.
+	mock.ExpectQuery(
 		regexp.QuoteMeta(
 			`INSERT INTO "evaluation_answers" ("evaluation_id","criterion_id","score") VALUES ($1,$2,$3) RETURNING "id"`,
 		),
 	).
 		WithArgs(1, 1, 4).
-		WillReturnResult(sqlmock.NewResult(1, 1))
+		WillReturnRows(
+			sqlmock.NewRows([]string{"id"}).AddRow(1),
+		)
 
 	mock.ExpectCommit()
 
+	// Rechargement de l'évaluation.
 	mock.ExpectQuery(
 		regexp.QuoteMeta(
 			`SELECT * FROM "evaluations" WHERE "evaluations"."id" = $1 ORDER BY "evaluations"."id" LIMIT $2`,
@@ -99,6 +112,7 @@ func TestRepository_Create_Success(t *testing.T) {
 			),
 		)
 
+	// Preload des réponses.
 	mock.ExpectQuery(
 		regexp.QuoteMeta(
 			`SELECT * FROM "evaluation_answers" WHERE "evaluation_answers"."evaluation_id" = $1`,
@@ -145,7 +159,9 @@ func TestRepository_Create_Success(t *testing.T) {
 	assert.Equal(t, 20, result.CourseID)
 	assert.Equal(t, "2025-2026", result.AcademicYear)
 	assert.Equal(t, "S1", result.Period)
-	assert.Len(t, result.Answers, 1)
+
+	require.Len(t, result.Answers, 1)
+
 	assert.Equal(t, 1, result.Answers[0].CriterionID)
 	assert.Equal(t, 4, result.Answers[0].Score)
 
@@ -200,6 +216,72 @@ func TestRepository_Create_EvaluationError(t *testing.T) {
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+// ---------------------------------------------------------
+// Create - erreur lors de la création d'une réponse
+// ---------------------------------------------------------
+
+func TestRepository_Create_AnswerError(t *testing.T) {
+	repository, mock, cleanup := setupEvaluationRepositoryTest(t)
+	defer cleanup()
+
+	mock.ExpectBegin()
+
+	// L'évaluation est créée avec succès.
+	mock.ExpectQuery(
+		regexp.QuoteMeta(
+			`INSERT INTO "evaluations" ("student_id","professor_id","course_id","academic_year","period","submitted_at") VALUES ($1,$2,$3,$4,$5,$6) RETURNING "id"`,
+		),
+	).
+		WithArgs(
+			5,
+			10,
+			20,
+			"2025-2026",
+			"S1",
+			sqlmock.AnyArg(),
+		).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"id"}).AddRow(1),
+		)
+
+	// La réponse échoue.
+	mock.ExpectQuery(
+		regexp.QuoteMeta(
+			`INSERT INTO "evaluation_answers" ("evaluation_id","criterion_id","score") VALUES ($1,$2,$3) RETURNING "id"`,
+		),
+	).
+		WithArgs(1, 1, 4).
+		WillReturnError(assert.AnError)
+
+	// La transaction doit être annulée.
+	mock.ExpectRollback()
+
+	evaluation := Evaluation{
+		StudentID:    5,
+		ProfessorID:  10,
+		CourseID:     20,
+		AcademicYear: "2025-2026",
+		Period:       "S1",
+		Answers: []EvaluationAnswer{
+			{
+				CriterionID: 1,
+				Score:       4,
+			},
+		},
+	}
+
+	result, err := repository.Create(evaluation)
+
+	assert.Nil(t, result)
+	assert.Error(t, err)
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+// =========================================================
+// GET ALL
+// =========================================================
 
 // ---------------------------------------------------------
 // GetAll - succès
@@ -270,6 +352,7 @@ func TestRepository_GetAll_Success(t *testing.T) {
 
 	assert.Equal(t, 1, result[0].ID)
 	assert.Equal(t, 2, result[1].ID)
+
 	assert.Len(t, result[0].Answers, 1)
 	assert.Len(t, result[1].Answers, 1)
 
@@ -298,6 +381,10 @@ func TestRepository_GetAll_Error(t *testing.T) {
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+// =========================================================
+// GET BY ID
+// =========================================================
 
 // ---------------------------------------------------------
 // GetByID - succès
@@ -362,7 +449,10 @@ func TestRepository_GetByID_Success(t *testing.T) {
 
 	assert.Equal(t, 1, result.ID)
 	assert.Equal(t, 5, result.StudentID)
-	assert.Len(t, result.Answers, 1)
+	assert.Equal(t, 10, result.ProfessorID)
+	assert.Equal(t, 20, result.CourseID)
+
+	require.Len(t, result.Answers, 1)
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -415,8 +505,12 @@ func TestRepository_GetByID_Error(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+// =========================================================
+// EXISTS
+// =========================================================
+
 // ---------------------------------------------------------
-// Exists - évaluation existante
+// Exists - vrai
 // ---------------------------------------------------------
 
 func TestRepository_Exists_True(t *testing.T) {
@@ -454,7 +548,7 @@ func TestRepository_Exists_True(t *testing.T) {
 }
 
 // ---------------------------------------------------------
-// Exists - évaluation inexistante
+// Exists - faux
 // ---------------------------------------------------------
 
 func TestRepository_Exists_False(t *testing.T) {
@@ -526,6 +620,10 @@ func TestRepository_Exists_Error(t *testing.T) {
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+// =========================================================
+// DELETE
+// =========================================================
 
 // ---------------------------------------------------------
 // Delete - succès

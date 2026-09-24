@@ -1,22 +1,45 @@
-* GET `/health`
-* POST `/auth/register`
-* POST `/auth/login`
-* GET `/professors`
-* GET `/professors/active`
-* GET `/professors/:id`
-* POST `/professors`
-* GET `/courses`
-* GET `/courses/:id`
-* POST `/courses`
-* GET `/criteria`
-* GET `/criteria/active`
-* GET `/criteria/:id`
-* POST `/criteria`
-* GET `/evaluations`
-* GET `/evaluations/:id`
-* POST `/evaluations/:student_id`
-* GET `/results/professors/:professor_id`
-* GET `/eligibility/:student_id`
-* POST `/students/:student_id/evaluations`
-* GET `/evaluations`
-* GET `/evaluations/:id`
+### Endpoints de l'API
+
+#### Health
+
+* `GET /health`
+
+#### Authentification
+
+* `POST /auth/register`
+* `POST /auth/login`
+
+#### Professeurs
+
+* `GET /professors`
+* `GET /professors/active`
+* `GET /professors/:id`
+* `POST /professors`
+
+#### Cours
+
+* `GET /courses`
+* `GET /courses/:id`
+* `POST /courses`
+
+#### Critères
+
+* `GET /criteria`
+* `GET /criteria/active`
+* `GET /criteria/:id`
+* `POST /criteria`
+
+#### Évaluations
+
+* `GET /evaluations`
+* `GET /evaluations/:id`
+* `POST /evaluations`
+* `DELETE /evaluations/:id`
+
+#### Résultats
+
+* `GET /results/professors/:professor_id`
+
+#### Éligibilité
+
+* `GET /eligibility/:student_id`

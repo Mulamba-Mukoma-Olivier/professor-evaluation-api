@@ -18,21 +18,34 @@ func NewRepository(db *gorm.DB) *Repository {
 	}
 }
 
+// Create crée une évaluation et toutes ses réponses
+// dans une seule transaction.
 func (r *Repository) Create(evaluation Evaluation) (*Evaluation, error) {
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+
+		// On sauvegarde temporairement les réponses.
+		answers := evaluation.Answers
+
+		// On évite que GORM crée automatiquement les réponses
+		// lors de la création de l'évaluation.
+		evaluation.Answers = nil
+
 		// Création de l'évaluation.
 		if err := tx.Create(&evaluation).Error; err != nil {
 			return err
 		}
 
 		// Création des réponses.
-		for i := range evaluation.Answers {
-			evaluation.Answers[i].EvaluationID = evaluation.ID
+		for i := range answers {
+			answers[i].EvaluationID = evaluation.ID
 
-			if err := tx.Create(&evaluation.Answers[i]).Error; err != nil {
+			if err := tx.Create(&answers[i]).Error; err != nil {
 				return err
 			}
 		}
+
+		// On remet les réponses dans l'objet retourné.
+		evaluation.Answers = answers
 
 		return nil
 	})
@@ -51,6 +64,8 @@ func (r *Repository) Create(evaluation Evaluation) (*Evaluation, error) {
 	return &evaluation, nil
 }
 
+// GetAll retourne toutes les évaluations
+// avec leurs réponses.
 func (r *Repository) GetAll() ([]Evaluation, error) {
 	var evaluations []Evaluation
 
@@ -65,6 +80,8 @@ func (r *Repository) GetAll() ([]Evaluation, error) {
 	return evaluations, nil
 }
 
+// GetByID retourne une évaluation par son ID
+// avec ses réponses.
 func (r *Repository) GetByID(id int) (*Evaluation, error) {
 	var evaluation Evaluation
 
@@ -83,6 +100,9 @@ func (r *Repository) GetByID(id int) (*Evaluation, error) {
 	return &evaluation, nil
 }
 
+// Exists vérifie si un étudiant a déjà évalué
+// un professeur pour un cours, une année académique
+// et une période donnée.
 func (r *Repository) Exists(
 	studentID int,
 	professorID int,
@@ -111,6 +131,9 @@ func (r *Repository) Exists(
 	return count > 0, nil
 }
 
+// Delete supprime une évaluation.
+// Les réponses associées seront également supprimées
+// grâce à la contrainte OnDelete:CASCADE du modèle.
 func (r *Repository) Delete(id int) error {
 	result := r.db.Delete(&Evaluation{}, id)
 

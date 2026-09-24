@@ -15,17 +15,21 @@ type FakeEvaluationRepository struct {
 	CreatedEvaluation *Evaluation
 	CreateError       error
 
-	Evaluations       []Evaluation
-	GetAllError       error
+	Evaluations  []Evaluation
+	GetAllError  error
 
-	Evaluation        *Evaluation
-	GetByIDError      error
+	Evaluation   *Evaluation
+	GetByIDError error
 
-	ExistsResult      bool
-	ExistsError       error
+	ExistsResult bool
+	ExistsError  error
 
-	DeleteError       error
+	DeleteError error
 }
+
+// ---------------------------------------------------------
+// Fake Repository - Create
+// ---------------------------------------------------------
 
 func (f *FakeEvaluationRepository) Create(evaluation Evaluation) (*Evaluation, error) {
 	if f.CreateError != nil {
@@ -43,6 +47,10 @@ func (f *FakeEvaluationRepository) Create(evaluation Evaluation) (*Evaluation, e
 	return &evaluation, nil
 }
 
+// ---------------------------------------------------------
+// Fake Repository - GetAll
+// ---------------------------------------------------------
+
 func (f *FakeEvaluationRepository) GetAll() ([]Evaluation, error) {
 	if f.GetAllError != nil {
 		return nil, f.GetAllError
@@ -51,6 +59,10 @@ func (f *FakeEvaluationRepository) GetAll() ([]Evaluation, error) {
 	return f.Evaluations, nil
 }
 
+// ---------------------------------------------------------
+// Fake Repository - GetByID
+// ---------------------------------------------------------
+
 func (f *FakeEvaluationRepository) GetByID(id int) (*Evaluation, error) {
 	if f.GetByIDError != nil {
 		return nil, f.GetByIDError
@@ -58,6 +70,10 @@ func (f *FakeEvaluationRepository) GetByID(id int) (*Evaluation, error) {
 
 	return f.Evaluation, nil
 }
+
+// ---------------------------------------------------------
+// Fake Repository - Exists
+// ---------------------------------------------------------
 
 func (f *FakeEvaluationRepository) Exists(
 	studentID int,
@@ -74,17 +90,24 @@ func (f *FakeEvaluationRepository) Exists(
 	return f.ExistsResult, nil
 }
 
+// ---------------------------------------------------------
+// Fake Repository - Delete
+// ---------------------------------------------------------
+
 func (f *FakeEvaluationRepository) Delete(id int) error {
 	return f.DeleteError
 }
 
+// =========================================================
+// CREATE
+// =========================================================
+
 // ---------------------------------------------------------
-// Create
+// Create - Success
 // ---------------------------------------------------------
 
 func TestService_Create_Success(t *testing.T) {
 	repository := &FakeEvaluationRepository{}
-
 	service := NewService(repository)
 
 	request := CreateEvaluationRequest{
@@ -115,6 +138,7 @@ func TestService_Create_Success(t *testing.T) {
 	assert.Equal(t, 20, result.CourseID)
 	assert.Equal(t, "2025-2026", result.AcademicYear)
 	assert.Equal(t, "S1", result.Period)
+
 	assert.Len(t, result.Answers, 2)
 
 	assert.Equal(t, 1, result.Answers[0].CriterionID)
@@ -124,7 +148,12 @@ func TestService_Create_Success(t *testing.T) {
 	assert.Equal(t, 5, result.Answers[1].Score)
 
 	require.NotNil(t, repository.CreatedEvaluation)
-	assert.Equal(t, 5, repository.CreatedEvaluation.StudentID)
+
+	assert.Equal(
+		t,
+		5,
+		repository.CreatedEvaluation.StudentID,
+	)
 }
 
 // ---------------------------------------------------------
@@ -152,12 +181,9 @@ func TestService_Create_InvalidProfessorID(t *testing.T) {
 	service := NewService(repository)
 
 	request := validEvaluationRequest()
-
-	result, err := service.Create(5, request)
-
 	request.ProfessorID = 0
 
-	result, err = service.Create(5, request)
+	result, err := service.Create(5, request)
 
 	assert.Nil(t, result)
 	assert.ErrorIs(t, err, ErrInvalidProfessorID)
@@ -283,6 +309,33 @@ func TestService_Create_ScoreTooHigh(t *testing.T) {
 }
 
 // ---------------------------------------------------------
+// Duplicate criterion
+// ---------------------------------------------------------
+
+func TestService_Create_DuplicateCriterion(t *testing.T) {
+	repository := &FakeEvaluationRepository{}
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	request.Answers = []Answer{
+		{
+			CriterionID: 1,
+			Score:       4,
+		},
+		{
+			CriterionID: 1,
+			Score:       5,
+		},
+	}
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, ErrDuplicateCriterion)
+}
+
+// ---------------------------------------------------------
 // Duplicate evaluation
 // ---------------------------------------------------------
 
@@ -352,6 +405,7 @@ func TestService_Create_TrimsFields(t *testing.T) {
 	service := NewService(repository)
 
 	request := validEvaluationRequest()
+
 	request.AcademicYear = " 2025-2026 "
 	request.Period = " S1 "
 
@@ -364,23 +418,27 @@ func TestService_Create_TrimsFields(t *testing.T) {
 	assert.Equal(t, "S1", result.Period)
 }
 
+// =========================================================
+// GET ALL
+// =========================================================
+
 // ---------------------------------------------------------
-// GetAll
+// GetAll - Success
 // ---------------------------------------------------------
 
 func TestService_GetAll_Success(t *testing.T) {
 	expected := []Evaluation{
 		{
-			ID:          1,
-			StudentID:   5,
+			ID:         1,
+			StudentID:  5,
 			ProfessorID: 10,
-			CourseID:    20,
+			CourseID:   20,
 		},
 		{
-			ID:          2,
-			StudentID:   6,
+			ID:         2,
+			StudentID:  6,
 			ProfessorID: 11,
-			CourseID:    21,
+			CourseID:   21,
 		},
 	}
 
@@ -397,7 +455,7 @@ func TestService_GetAll_Success(t *testing.T) {
 }
 
 // ---------------------------------------------------------
-// GetAll repository error
+// GetAll - Repository error
 // ---------------------------------------------------------
 
 func TestService_GetAll_Error(t *testing.T) {
@@ -415,8 +473,12 @@ func TestService_GetAll_Error(t *testing.T) {
 	assert.ErrorIs(t, err, repositoryError)
 }
 
+// =========================================================
+// GET BY ID
+// =========================================================
+
 // ---------------------------------------------------------
-// GetByID success
+// GetByID - Success
 // ---------------------------------------------------------
 
 func TestService_GetByID_Success(t *testing.T) {
@@ -442,7 +504,7 @@ func TestService_GetByID_Success(t *testing.T) {
 }
 
 // ---------------------------------------------------------
-// GetByID invalid ID
+// GetByID - Invalid ID
 // ---------------------------------------------------------
 
 func TestService_GetByID_InvalidID(t *testing.T) {
@@ -456,7 +518,7 @@ func TestService_GetByID_InvalidID(t *testing.T) {
 }
 
 // ---------------------------------------------------------
-// GetByID repository error
+// GetByID - Repository error
 // ---------------------------------------------------------
 
 func TestService_GetByID_Error(t *testing.T) {
@@ -474,9 +536,57 @@ func TestService_GetByID_Error(t *testing.T) {
 	assert.ErrorIs(t, err, repositoryError)
 }
 
+// =========================================================
+// DELETE
+// =========================================================
+
 // ---------------------------------------------------------
-// Helper
+// Delete - Success
 // ---------------------------------------------------------
+
+func TestService_Delete_Success(t *testing.T) {
+	repository := &FakeEvaluationRepository{}
+	service := NewService(repository)
+
+	err := service.Delete(1)
+
+	assert.NoError(t, err)
+}
+
+// ---------------------------------------------------------
+// Delete - Invalid ID
+// ---------------------------------------------------------
+
+func TestService_Delete_InvalidID(t *testing.T) {
+	repository := &FakeEvaluationRepository{}
+	service := NewService(repository)
+
+	err := service.Delete(0)
+
+	assert.ErrorIs(t, err, ErrInvalidEvaluationID)
+}
+
+// ---------------------------------------------------------
+// Delete - Repository error
+// ---------------------------------------------------------
+
+func TestService_Delete_Error(t *testing.T) {
+	repositoryError := errors.New("database error")
+
+	repository := &FakeEvaluationRepository{
+		DeleteError: repositoryError,
+	}
+
+	service := NewService(repository)
+
+	err := service.Delete(1)
+
+	assert.ErrorIs(t, err, repositoryError)
+}
+
+// =========================================================
+// HELPER
+// =========================================================
 
 func validEvaluationRequest() CreateEvaluationRequest {
 	return CreateEvaluationRequest{

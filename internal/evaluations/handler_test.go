@@ -9,20 +9,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// FakeEvaluationService permet de tester le handler
-// sans utiliser PostgreSQL ni le repository.
 type FakeEvaluationService struct {
-	CreateResult    *Evaluation
-	CreateError     error
+	CreateResult *Evaluation
+	CreateError  error
 
-	Evaluations     []Evaluation
-	GetAllError     error
+	Evaluations []Evaluation
+	GetAllError error
 
-	Evaluation      *Evaluation
-	GetByIDError    error
+	Evaluation   *Evaluation
+	GetByIDError error
+
+	DeleteError error
 }
 
 func (f *FakeEvaluationService) Create(
@@ -70,21 +69,14 @@ func (f *FakeEvaluationService) GetByID(id int) (*Evaluation, error) {
 	return f.Evaluation, nil
 }
 
-// ---------------------------------------------------------
-// Create - succès
-// ---------------------------------------------------------
+func (f *FakeEvaluationService) Delete(id int) error {
+	return f.DeleteError
+}
 
-func TestHandler_Create_Success(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+var _ EvaluationService = (*FakeEvaluationService)(nil)
 
-	service := &FakeEvaluationService{}
-
-	handler := NewHandler(service)
-
-	router := gin.New()
-	router.POST("/students/:student_id/evaluations", handler.Create)
-
-	body := `{
+func validCreateEvaluationBody() string {
+	return `{
 		"professor_id": 10,
 		"course_id": 20,
 		"academic_year": "2025-2026",
@@ -96,11 +88,25 @@ func TestHandler_Create_Success(t *testing.T) {
 			}
 		]
 	}`
+}
+
+func TestHandler_Create_Success(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &FakeEvaluationService{}
+	handler := NewHandler(service)
+
+	router := gin.New()
+
+	router.POST("/evaluations", func(c *gin.Context) {
+		c.Set("user_id", 5)
+		handler.Create(c)
+	})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/students/5/evaluations",
-		bytes.NewBufferString(body),
+		"/evaluations",
+		bytes.NewBufferString(validCreateEvaluationBody()),
 	)
 
 	request.Header.Set("Content-Type", "application/json")
@@ -110,42 +116,24 @@ func TestHandler_Create_Success(t *testing.T) {
 	router.ServeHTTP(response, request)
 
 	assert.Equal(t, http.StatusCreated, response.Code)
-
 	assert.Contains(t, response.Body.String(), `"student_id":5`)
 	assert.Contains(t, response.Body.String(), `"professor_id":10`)
 	assert.Contains(t, response.Body.String(), `"course_id":20`)
 }
 
-// ---------------------------------------------------------
-// Create - student ID invalide
-// ---------------------------------------------------------
-
-func TestHandler_Create_InvalidStudentID(t *testing.T) {
+func TestHandler_Create_Unauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := &FakeEvaluationService{}
 	handler := NewHandler(service)
 
 	router := gin.New()
-	router.POST("/students/:student_id/evaluations", handler.Create)
-
-	body := `{
-		"professor_id": 10,
-		"course_id": 20,
-		"academic_year": "2025-2026",
-		"period": "S1",
-		"answers": [
-			{
-				"criterion_id": 1,
-				"score": 4
-			}
-		]
-	}`
+	router.POST("/evaluations", handler.Create)
 
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/students/abc/evaluations",
-		bytes.NewBufferString(body),
+		"/evaluations",
+		bytes.NewBufferString(validCreateEvaluationBody()),
 	)
 
 	request.Header.Set("Content-Type", "application/json")
@@ -154,13 +142,38 @@ func TestHandler_Create_InvalidStudentID(t *testing.T) {
 
 	router.ServeHTTP(response, request)
 
-	assert.Equal(t, http.StatusBadRequest, response.Code)
-	assert.Contains(t, response.Body.String(), "invalid student ID")
+	assert.Equal(t, http.StatusUnauthorized, response.Code)
+	assert.Contains(t, response.Body.String(), "user not authenticated")
 }
 
-// ---------------------------------------------------------
-// Create - JSON invalide
-// ---------------------------------------------------------
+func TestHandler_Create_InvalidUserID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &FakeEvaluationService{}
+	handler := NewHandler(service)
+
+	router := gin.New()
+
+	router.POST("/evaluations", func(c *gin.Context) {
+		c.Set("user_id", "5")
+		handler.Create(c)
+	})
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/evaluations",
+		bytes.NewBufferString(validCreateEvaluationBody()),
+	)
+
+	request.Header.Set("Content-Type", "application/json")
+
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusUnauthorized, response.Code)
+	assert.Contains(t, response.Body.String(), "invalid user ID")
+}
 
 func TestHandler_Create_InvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -169,7 +182,11 @@ func TestHandler_Create_InvalidJSON(t *testing.T) {
 	handler := NewHandler(service)
 
 	router := gin.New()
-	router.POST("/students/:student_id/evaluations", handler.Create)
+
+	router.POST("/evaluations", func(c *gin.Context) {
+		c.Set("user_id", 5)
+		handler.Create(c)
+	})
 
 	body := `{
 		"professor_id": 10,
@@ -179,7 +196,7 @@ func TestHandler_Create_InvalidJSON(t *testing.T) {
 
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/students/5/evaluations",
+		"/evaluations",
 		bytes.NewBufferString(body),
 	)
 
@@ -193,39 +210,26 @@ func TestHandler_Create_InvalidJSON(t *testing.T) {
 	assert.Contains(t, response.Body.String(), "invalid request")
 }
 
-// ---------------------------------------------------------
-// Create - erreur métier
-// ---------------------------------------------------------
-
 func TestHandler_Create_ServiceError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := &FakeEvaluationService{
-		CreateError: errors.New("student has already evaluated this professor for this course"),
+		CreateError: ErrDuplicateEvaluation,
 	}
 
 	handler := NewHandler(service)
 
 	router := gin.New()
-	router.POST("/students/:student_id/evaluations", handler.Create)
 
-	body := `{
-		"professor_id": 10,
-		"course_id": 20,
-		"academic_year": "2025-2026",
-		"period": "S1",
-		"answers": [
-			{
-				"criterion_id": 1,
-				"score": 4
-			}
-		]
-	}`
+	router.POST("/evaluations", func(c *gin.Context) {
+		c.Set("user_id", 5)
+		handler.Create(c)
+	})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/students/5/evaluations",
-		bytes.NewBufferString(body),
+		"/evaluations",
+		bytes.NewBufferString(validCreateEvaluationBody()),
 	)
 
 	request.Header.Set("Content-Type", "application/json")
@@ -238,43 +242,30 @@ func TestHandler_Create_ServiceError(t *testing.T) {
 	assert.Contains(
 		t,
 		response.Body.String(),
-		"student has already evaluated this professor for this course",
+		"student has already evaluated this professor",
 	)
 }
 
-// ---------------------------------------------------------
-// Create - ressource inexistante
-// ---------------------------------------------------------
-
-func TestHandler_Create_NotFound(t *testing.T) {
+func TestHandler_Create_InternalServerError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	service := &FakeEvaluationService{
-		CreateError: ErrEvaluationNotFound,
+		CreateError: errors.New("database error"),
 	}
 
 	handler := NewHandler(service)
 
 	router := gin.New()
-	router.POST("/students/:student_id/evaluations", handler.Create)
 
-	body := `{
-		"professor_id": 10,
-		"course_id": 20,
-		"academic_year": "2025-2026",
-		"period": "S1",
-		"answers": [
-			{
-				"criterion_id": 1,
-				"score": 4
-			}
-		]
-	}`
+	router.POST("/evaluations", func(c *gin.Context) {
+		c.Set("user_id", 5)
+		handler.Create(c)
+	})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/students/5/evaluations",
-		bytes.NewBufferString(body),
+		"/evaluations",
+		bytes.NewBufferString(validCreateEvaluationBody()),
 	)
 
 	request.Header.Set("Content-Type", "application/json")
@@ -283,13 +274,9 @@ func TestHandler_Create_NotFound(t *testing.T) {
 
 	router.ServeHTTP(response, request)
 
-	assert.Equal(t, http.StatusNotFound, response.Code)
-	assert.Contains(t, response.Body.String(), "required resource not found")
+	assert.Equal(t, http.StatusInternalServerError, response.Code)
+	assert.Contains(t, response.Body.String(), "internal server error")
 }
-
-// ---------------------------------------------------------
-// GetAll - succès
-// ---------------------------------------------------------
 
 func TestHandler_GetAll_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -329,15 +316,10 @@ func TestHandler_GetAll_Success(t *testing.T) {
 	router.ServeHTTP(response, request)
 
 	assert.Equal(t, http.StatusOK, response.Code)
-
 	assert.Contains(t, response.Body.String(), `"evaluations"`)
 	assert.Contains(t, response.Body.String(), `"student_id":5`)
 	assert.Contains(t, response.Body.String(), `"student_id":6`)
 }
-
-// ---------------------------------------------------------
-// GetAll - erreur serveur
-// ---------------------------------------------------------
 
 func TestHandler_GetAll_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -364,10 +346,6 @@ func TestHandler_GetAll_Error(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, response.Code)
 	assert.Contains(t, response.Body.String(), "internal server error")
 }
-
-// ---------------------------------------------------------
-// GetByID - succès
-// ---------------------------------------------------------
 
 func TestHandler_GetByID_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -399,14 +377,9 @@ func TestHandler_GetByID_Success(t *testing.T) {
 	router.ServeHTTP(response, request)
 
 	assert.Equal(t, http.StatusOK, response.Code)
-
 	assert.Contains(t, response.Body.String(), `"id":1`)
 	assert.Contains(t, response.Body.String(), `"student_id":5`)
 }
-
-// ---------------------------------------------------------
-// GetByID - ID invalide
-// ---------------------------------------------------------
 
 func TestHandler_GetByID_InvalidID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -431,10 +404,6 @@ func TestHandler_GetByID_InvalidID(t *testing.T) {
 	assert.Contains(t, response.Body.String(), "invalid evaluation ID")
 }
 
-// ---------------------------------------------------------
-// GetByID - ID égal à zéro
-// ---------------------------------------------------------
-
 func TestHandler_GetByID_ZeroID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -457,10 +426,6 @@ func TestHandler_GetByID_ZeroID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, response.Code)
 	assert.Contains(t, response.Body.String(), "invalid evaluation ID")
 }
-
-// ---------------------------------------------------------
-// GetByID - évaluation inexistante
-// ---------------------------------------------------------
 
 func TestHandler_GetByID_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -488,10 +453,6 @@ func TestHandler_GetByID_NotFound(t *testing.T) {
 	assert.Contains(t, response.Body.String(), "evaluation not found")
 }
 
-// ---------------------------------------------------------
-// GetByID - erreur serveur
-// ---------------------------------------------------------
-
 func TestHandler_GetByID_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -518,8 +479,126 @@ func TestHandler_GetByID_Error(t *testing.T) {
 	assert.Contains(t, response.Body.String(), "internal server error")
 }
 
-// Vérifie que le fake implémente bien EvaluationService.
-var _ EvaluationService = (*FakeEvaluationService)(nil)
+func TestHandler_Delete_Success(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
-// Évite une erreur si require est supprimé plus tard
-var _ = require.NoError
+	service := &FakeEvaluationService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/evaluations/:id", handler.Delete)
+
+	request := httptest.NewRequest(
+		http.MethodDelete,
+		"/evaluations/1",
+		nil,
+	)
+
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusOK, response.Code)
+	assert.Contains(t, response.Body.String(), "evaluation deleted successfully")
+}
+
+func TestHandler_Delete_InvalidID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &FakeEvaluationService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/evaluations/:id", handler.Delete)
+
+	request := httptest.NewRequest(
+		http.MethodDelete,
+		"/evaluations/abc",
+		nil,
+	)
+
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusBadRequest, response.Code)
+	assert.Contains(t, response.Body.String(), "invalid evaluation ID")
+}
+
+func TestHandler_Delete_ZeroID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &FakeEvaluationService{}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/evaluations/:id", handler.Delete)
+
+	request := httptest.NewRequest(
+		http.MethodDelete,
+		"/evaluations/0",
+		nil,
+	)
+
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusBadRequest, response.Code)
+	assert.Contains(t, response.Body.String(), "invalid evaluation ID")
+}
+
+func TestHandler_Delete_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &FakeEvaluationService{
+		DeleteError: ErrEvaluationNotFound,
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/evaluations/:id", handler.Delete)
+
+	request := httptest.NewRequest(
+		http.MethodDelete,
+		"/evaluations/999",
+		nil,
+	)
+
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusNotFound, response.Code)
+	assert.Contains(t, response.Body.String(), "evaluation not found")
+}
+
+func TestHandler_Delete_Error(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	service := &FakeEvaluationService{
+		DeleteError: errors.New("database error"),
+	}
+
+	handler := NewHandler(service)
+
+	router := gin.New()
+	router.DELETE("/evaluations/:id", handler.Delete)
+
+	request := httptest.NewRequest(
+		http.MethodDelete,
+		"/evaluations/1",
+		nil,
+	)
+
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusInternalServerError, response.Code)
+	assert.Contains(t, response.Body.String(), "internal server error")
+}

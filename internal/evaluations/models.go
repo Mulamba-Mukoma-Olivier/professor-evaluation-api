@@ -11,15 +11,16 @@ type Evaluation struct {
 	CourseID     int                `json:"course_id" gorm:"not null"`
 	AcademicYear string             `json:"academic_year" gorm:"not null"`
 	Period       string             `json:"period" gorm:"not null"`
-	Answers      []EvaluationAnswer `json:"answers" gorm:"foreignKey:EvaluationID"`
+	Answers      []EvaluationAnswer `json:"answers" gorm:"foreignKey:EvaluationID;constraint:OnDelete:CASCADE"`
 	SubmittedAt  time.Time          `json:"submitted_at"`
 }
 
-// EvaluationAnswer représente la note donnée à un critère.
+// EvaluationAnswer représente la note donnée par un étudiant
+// à un critère dans le cadre d'une évaluation.
 type EvaluationAnswer struct {
 	ID           int `json:"id" gorm:"primaryKey"`
-	EvaluationID int `json:"evaluation_id" gorm:"not null"`
-	CriterionID  int `json:"criterion_id" gorm:"not null"`
+	EvaluationID int `json:"evaluation_id" gorm:"not null;uniqueIndex:idx_evaluation_criterion"`
+	CriterionID  int `json:"criterion_id" gorm:"not null;uniqueIndex:idx_evaluation_criterion"`
 	Score        int `json:"score" gorm:"not null"`
 }
 
