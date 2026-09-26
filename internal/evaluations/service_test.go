@@ -3,55 +3,75 @@ package evaluations
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // FakeEvaluationRepository permet de tester le service
-// sans utiliser PostgreSQL.
+// sans utiliser la base de données.
 type FakeEvaluationRepository struct {
+	// Create
 	CreatedEvaluation *Evaluation
 	CreateError       error
 
-	Evaluations  []Evaluation
-	GetAllError  error
+	// GetAll
+	Evaluations []Evaluation
+	GetAllError error
 
+	// GetByID
 	Evaluation   *Evaluation
 	GetByIDError error
 
+	// Exists
 	ExistsResult bool
 	ExistsError  error
 
+	// Professor
+	ProfessorExistsResult bool
+	ProfessorExistsError  error
+
+	// Course
+	CourseExistsResult bool
+	CourseExistsError  error
+
+	// Criterion
+	CriterionExistsResult bool
+	CriterionExistsError  error
+
+	// Criterion active
+	CriterionActiveResult bool
+	CriterionActiveError  error
+
+	// Delete
 	DeleteError error
 }
 
-// ---------------------------------------------------------
-// Fake Repository - Create
-// ---------------------------------------------------------
+// =========================================================
+// FAKE REPOSITORY - CREATE
+// =========================================================
 
-func (f *FakeEvaluationRepository) Create(evaluation Evaluation) (*Evaluation, error) {
+func (f *FakeEvaluationRepository) Create(
+	evaluation Evaluation,
+) (*Evaluation, error) {
+
 	if f.CreateError != nil {
 		return nil, f.CreateError
 	}
 
 	evaluation.ID = 1
 
-	if evaluation.SubmittedAt.IsZero() {
-		evaluation.SubmittedAt = time.Now()
-	}
-
 	f.CreatedEvaluation = &evaluation
 
 	return &evaluation, nil
 }
 
-// ---------------------------------------------------------
-// Fake Repository - GetAll
-// ---------------------------------------------------------
+// =========================================================
+// FAKE REPOSITORY - GET ALL
+// =========================================================
 
 func (f *FakeEvaluationRepository) GetAll() ([]Evaluation, error) {
+
 	if f.GetAllError != nil {
 		return nil, f.GetAllError
 	}
@@ -59,11 +79,14 @@ func (f *FakeEvaluationRepository) GetAll() ([]Evaluation, error) {
 	return f.Evaluations, nil
 }
 
-// ---------------------------------------------------------
-// Fake Repository - GetByID
-// ---------------------------------------------------------
+// =========================================================
+// FAKE REPOSITORY - GET BY ID
+// =========================================================
 
-func (f *FakeEvaluationRepository) GetByID(id int) (*Evaluation, error) {
+func (f *FakeEvaluationRepository) GetByID(
+	id int,
+) (*Evaluation, error) {
+
 	if f.GetByIDError != nil {
 		return nil, f.GetByIDError
 	}
@@ -71,9 +94,9 @@ func (f *FakeEvaluationRepository) GetByID(id int) (*Evaluation, error) {
 	return f.Evaluation, nil
 }
 
-// ---------------------------------------------------------
-// Fake Repository - Exists
-// ---------------------------------------------------------
+// =========================================================
+// FAKE REPOSITORY - EXISTS
+// =========================================================
 
 func (f *FakeEvaluationRepository) Exists(
 	studentID int,
@@ -90,9 +113,69 @@ func (f *FakeEvaluationRepository) Exists(
 	return f.ExistsResult, nil
 }
 
-// ---------------------------------------------------------
-// Fake Repository - Delete
-// ---------------------------------------------------------
+// =========================================================
+// FAKE REPOSITORY - PROFESSOR EXISTS
+// =========================================================
+
+func (f *FakeEvaluationRepository) ProfessorExists(
+	professorID int,
+) (bool, error) {
+
+	if f.ProfessorExistsError != nil {
+		return false, f.ProfessorExistsError
+	}
+
+	return f.ProfessorExistsResult, nil
+}
+
+// =========================================================
+// FAKE REPOSITORY - COURSE EXISTS
+// =========================================================
+
+func (f *FakeEvaluationRepository) CourseExists(
+	courseID int,
+) (bool, error) {
+
+	if f.CourseExistsError != nil {
+		return false, f.CourseExistsError
+	}
+
+	return f.CourseExistsResult, nil
+}
+
+// =========================================================
+// FAKE REPOSITORY - CRITERION EXISTS
+// =========================================================
+
+func (f *FakeEvaluationRepository) CriterionExists(
+	criterionID int,
+) (bool, error) {
+
+	if f.CriterionExistsError != nil {
+		return false, f.CriterionExistsError
+	}
+
+	return f.CriterionExistsResult, nil
+}
+
+// =========================================================
+// FAKE REPOSITORY - CRITERION ACTIVE
+// =========================================================
+
+func (f *FakeEvaluationRepository) CriterionIsActive(
+	criterionID int,
+) (bool, error) {
+
+	if f.CriterionActiveError != nil {
+		return false, f.CriterionActiveError
+	}
+
+	return f.CriterionActiveResult, nil
+}
+
+// =========================================================
+// FAKE REPOSITORY - DELETE
+// =========================================================
 
 func (f *FakeEvaluationRepository) Delete(id int) error {
 	return f.DeleteError
@@ -107,25 +190,17 @@ func (f *FakeEvaluationRepository) Delete(id int) error {
 // ---------------------------------------------------------
 
 func TestService_Create_Success(t *testing.T) {
-	repository := &FakeEvaluationRepository{}
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: true,
+	}
+
 	service := NewService(repository)
 
-	request := CreateEvaluationRequest{
-		ProfessorID:  10,
-		CourseID:     20,
-		AcademicYear: "2025-2026",
-		Period:       "S1",
-		Answers: []Answer{
-			{
-				CriterionID: 1,
-				Score:       4,
-			},
-			{
-				CriterionID: 2,
-				Score:       5,
-			},
-		},
-	}
+	request := validEvaluationRequest()
 
 	result, err := service.Create(5, request)
 
@@ -136,16 +211,14 @@ func TestService_Create_Success(t *testing.T) {
 	assert.Equal(t, 5, result.StudentID)
 	assert.Equal(t, 10, result.ProfessorID)
 	assert.Equal(t, 20, result.CourseID)
+
 	assert.Equal(t, "2025-2026", result.AcademicYear)
 	assert.Equal(t, "S1", result.Period)
 
-	assert.Len(t, result.Answers, 2)
+	assert.Len(t, result.Answers, 1)
 
 	assert.Equal(t, 1, result.Answers[0].CriterionID)
 	assert.Equal(t, 4, result.Answers[0].Score)
-
-	assert.Equal(t, 2, result.Answers[1].CriterionID)
-	assert.Equal(t, 5, result.Answers[1].Score)
 
 	require.NotNil(t, repository.CreatedEvaluation)
 
@@ -161,6 +234,7 @@ func TestService_Create_Success(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_InvalidStudentID(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -177,6 +251,7 @@ func TestService_Create_InvalidStudentID(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_InvalidProfessorID(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -190,10 +265,53 @@ func TestService_Create_InvalidProfessorID(t *testing.T) {
 }
 
 // ---------------------------------------------------------
+// Professor not found
+// ---------------------------------------------------------
+
+func TestService_Create_ProfessorNotFound(t *testing.T) {
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: false,
+	}
+
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, ErrProfessorNotFound)
+}
+
+// ---------------------------------------------------------
+// Professor repository error
+// ---------------------------------------------------------
+
+func TestService_Create_ProfessorExistsError(t *testing.T) {
+
+	repositoryError := errors.New("database error")
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsError: repositoryError,
+	}
+
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, repositoryError)
+}
+
+// ---------------------------------------------------------
 // Invalid course ID
 // ---------------------------------------------------------
 
 func TestService_Create_InvalidCourseID(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -207,10 +325,55 @@ func TestService_Create_InvalidCourseID(t *testing.T) {
 }
 
 // ---------------------------------------------------------
+// Course not found
+// ---------------------------------------------------------
+
+func TestService_Create_CourseNotFound(t *testing.T) {
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    false,
+	}
+
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, ErrCourseNotFound)
+}
+
+// ---------------------------------------------------------
+// Course repository error
+// ---------------------------------------------------------
+
+func TestService_Create_CourseExistsError(t *testing.T) {
+
+	repositoryError := errors.New("database error")
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsError:    repositoryError,
+	}
+
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, repositoryError)
+}
+
+// ---------------------------------------------------------
 // Academic year required
 // ---------------------------------------------------------
 
 func TestService_Create_AcademicYearRequired(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -228,6 +391,7 @@ func TestService_Create_AcademicYearRequired(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_PeriodRequired(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -245,6 +409,7 @@ func TestService_Create_PeriodRequired(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_NoAnswers(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -262,7 +427,12 @@ func TestService_Create_NoAnswers(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_InvalidCriterionID(t *testing.T) {
-	repository := &FakeEvaluationRepository{}
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+	}
+
 	service := NewService(repository)
 
 	request := validEvaluationRequest()
@@ -275,11 +445,112 @@ func TestService_Create_InvalidCriterionID(t *testing.T) {
 }
 
 // ---------------------------------------------------------
+// Criterion not found
+// ---------------------------------------------------------
+
+func TestService_Create_CriterionNotFound(t *testing.T) {
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: false,
+	}
+
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, ErrCriterionNotFound)
+}
+
+// ---------------------------------------------------------
+// Criterion exists repository error
+// ---------------------------------------------------------
+
+func TestService_Create_CriterionExistsError(t *testing.T) {
+
+	repositoryError := errors.New("database error")
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsError: repositoryError,
+	}
+
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, repositoryError)
+}
+
+// ---------------------------------------------------------
+// Criterion inactive
+// ---------------------------------------------------------
+
+func TestService_Create_CriterionInactive(t *testing.T) {
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: false,
+	}
+
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, ErrCriterionInactive)
+}
+
+// ---------------------------------------------------------
+// Criterion active repository error
+// ---------------------------------------------------------
+
+func TestService_Create_CriterionActiveError(t *testing.T) {
+
+	repositoryError := errors.New("database error")
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveError:  repositoryError,
+	}
+
+	service := NewService(repository)
+
+	request := validEvaluationRequest()
+
+	result, err := service.Create(5, request)
+
+	assert.Nil(t, result)
+	assert.ErrorIs(t, err, repositoryError)
+}
+
+// ---------------------------------------------------------
 // Score too low
 // ---------------------------------------------------------
 
 func TestService_Create_ScoreTooLow(t *testing.T) {
-	repository := &FakeEvaluationRepository{}
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: true,
+	}
+
 	service := NewService(repository)
 
 	request := validEvaluationRequest()
@@ -296,7 +567,14 @@ func TestService_Create_ScoreTooLow(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_ScoreTooHigh(t *testing.T) {
-	repository := &FakeEvaluationRepository{}
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: true,
+	}
+
 	service := NewService(repository)
 
 	request := validEvaluationRequest()
@@ -313,7 +591,14 @@ func TestService_Create_ScoreTooHigh(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_DuplicateCriterion(t *testing.T) {
-	repository := &FakeEvaluationRepository{}
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: true,
+	}
+
 	service := NewService(repository)
 
 	request := validEvaluationRequest()
@@ -340,8 +625,13 @@ func TestService_Create_DuplicateCriterion(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_DuplicateEvaluation(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{
-		ExistsResult: true,
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: true,
+		ExistsResult:          true,
 	}
 
 	service := NewService(repository)
@@ -359,10 +649,15 @@ func TestService_Create_DuplicateEvaluation(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_ExistsError(t *testing.T) {
+
 	repositoryError := errors.New("database error")
 
 	repository := &FakeEvaluationRepository{
-		ExistsError: repositoryError,
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: true,
+		ExistsError:           repositoryError,
 	}
 
 	service := NewService(repository)
@@ -380,10 +675,15 @@ func TestService_Create_ExistsError(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_CreateError(t *testing.T) {
+
 	repositoryError := errors.New("database error")
 
 	repository := &FakeEvaluationRepository{
-		CreateError: repositoryError,
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: true,
+		CreateError:           repositoryError,
 	}
 
 	service := NewService(repository)
@@ -401,7 +701,14 @@ func TestService_Create_CreateError(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Create_TrimsFields(t *testing.T) {
-	repository := &FakeEvaluationRepository{}
+
+	repository := &FakeEvaluationRepository{
+		ProfessorExistsResult: true,
+		CourseExistsResult:    true,
+		CriterionExistsResult: true,
+		CriterionActiveResult: true,
+	}
+
 	service := NewService(repository)
 
 	request := validEvaluationRequest()
@@ -427,6 +734,7 @@ func TestService_Create_TrimsFields(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_GetAll_Success(t *testing.T) {
+
 	expected := []Evaluation{
 		{
 			ID:         1,
@@ -459,6 +767,7 @@ func TestService_GetAll_Success(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_GetAll_Error(t *testing.T) {
+
 	repositoryError := errors.New("database error")
 
 	repository := &FakeEvaluationRepository{
@@ -482,6 +791,7 @@ func TestService_GetAll_Error(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_GetByID_Success(t *testing.T) {
+
 	expected := &Evaluation{
 		ID:         1,
 		StudentID:  5,
@@ -508,6 +818,7 @@ func TestService_GetByID_Success(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_GetByID_InvalidID(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -522,6 +833,7 @@ func TestService_GetByID_InvalidID(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_GetByID_Error(t *testing.T) {
+
 	repositoryError := errors.New("database error")
 
 	repository := &FakeEvaluationRepository{
@@ -545,6 +857,7 @@ func TestService_GetByID_Error(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Delete_Success(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -558,6 +871,7 @@ func TestService_Delete_Success(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Delete_InvalidID(t *testing.T) {
+
 	repository := &FakeEvaluationRepository{}
 	service := NewService(repository)
 
@@ -571,6 +885,7 @@ func TestService_Delete_InvalidID(t *testing.T) {
 // ---------------------------------------------------------
 
 func TestService_Delete_Error(t *testing.T) {
+
 	repositoryError := errors.New("database error")
 
 	repository := &FakeEvaluationRepository{

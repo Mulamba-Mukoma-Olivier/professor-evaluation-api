@@ -36,7 +36,7 @@ func (h *Handler) Create(c *gin.Context) {
 	var request CreateEvaluationRequest
 
 	// --------------------------------------------------
-	// Validation du JSON
+	// 1. Validation du JSON
 	// --------------------------------------------------
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -46,7 +46,7 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	// --------------------------------------------------
-	// Récupération de l'utilisateur depuis le JWT
+	// 2. Récupération de l'utilisateur depuis le JWT
 	// --------------------------------------------------
 	userID, exists := c.Get("user_id")
 
@@ -67,12 +67,16 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	// --------------------------------------------------
-	// Création de l'évaluation
+	// 3. Création de l'évaluation
 	// --------------------------------------------------
 	evaluation, err := h.service.Create(studentID, request)
 
 	if err != nil {
 		switch {
+
+		// ----------------------------------------------
+		// Erreurs de requête
+		// ----------------------------------------------
 		case errors.Is(err, ErrInvalidStudentID),
 			errors.Is(err, ErrInvalidProfessorID),
 			errors.Is(err, ErrInvalidCourseID),
@@ -81,15 +85,68 @@ func (h *Handler) Create(c *gin.Context) {
 			errors.Is(err, ErrAnswersRequired),
 			errors.Is(err, ErrInvalidCriterionID),
 			errors.Is(err, ErrInvalidScore),
-			errors.Is(err, ErrDuplicateCriterion),
-			errors.Is(err, ErrDuplicateEvaluation):
+			errors.Is(err, ErrDuplicateCriterion):
 
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
 			})
 			return
 
+		// ----------------------------------------------
+		// Professeur inexistant
+		// ----------------------------------------------
+		case errors.Is(err, ErrProfessorNotFound):
+
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "professor not found",
+			})
+			return
+
+		// ----------------------------------------------
+		// Cours inexistant
+		// ----------------------------------------------
+		case errors.Is(err, ErrCourseNotFound):
+
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "course not found",
+			})
+			return
+
+		// ----------------------------------------------
+		// Critère inexistant
+		// ----------------------------------------------
+		case errors.Is(err, ErrCriterionNotFound):
+
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "criterion not found",
+			})
+			return
+
+		// ----------------------------------------------
+		// Critère inactif
+		// ----------------------------------------------
+		case errors.Is(err, ErrCriterionInactive):
+
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "criterion is inactive",
+			})
+			return
+
+		// ----------------------------------------------
+		// Évaluation déjà existante
+		// ----------------------------------------------
+		case errors.Is(err, ErrDuplicateEvaluation):
+
+			c.JSON(http.StatusConflict, gin.H{
+				"error": err.Error(),
+			})
+			return
+
+		// ----------------------------------------------
+		// Erreur interne
+		// ----------------------------------------------
 		default:
+
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "internal server error",
 			})
@@ -97,6 +154,9 @@ func (h *Handler) Create(c *gin.Context) {
 		}
 	}
 
+	// --------------------------------------------------
+	// 4. Succès
+	// --------------------------------------------------
 	c.JSON(http.StatusCreated, evaluation)
 }
 
@@ -130,6 +190,8 @@ func (h *Handler) GetByID(c *gin.Context) {
 	evaluation, err := h.service.GetByID(id)
 
 	if err != nil {
+
+		// ID invalide
 		if errors.Is(err, ErrInvalidEvaluationID) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -137,6 +199,7 @@ func (h *Handler) GetByID(c *gin.Context) {
 			return
 		}
 
+		// Évaluation inexistante
 		if errors.Is(err, ErrEvaluationNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "evaluation not found",
@@ -144,6 +207,7 @@ func (h *Handler) GetByID(c *gin.Context) {
 			return
 		}
 
+		// Erreur interne
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "internal server error",
 		})
@@ -167,6 +231,8 @@ func (h *Handler) Delete(c *gin.Context) {
 	err = h.service.Delete(id)
 
 	if err != nil {
+
+		// ID invalide
 		if errors.Is(err, ErrInvalidEvaluationID) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -174,6 +240,7 @@ func (h *Handler) Delete(c *gin.Context) {
 			return
 		}
 
+		// Évaluation inexistante
 		if errors.Is(err, ErrEvaluationNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error": "evaluation not found",
@@ -181,6 +248,7 @@ func (h *Handler) Delete(c *gin.Context) {
 			return
 		}
 
+		// Erreur interne
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "internal server error",
 		})

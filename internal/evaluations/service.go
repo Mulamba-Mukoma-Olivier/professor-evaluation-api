@@ -19,7 +19,16 @@ var (
 	ErrInvalidCriterionID = errors.New("invalid criterion ID")
 	ErrInvalidScore       = errors.New("score must be between 1 and 5")
 
-	ErrDuplicateCriterion = errors.New("criterion cannot appear more than once in an evaluation")
+	ErrProfessorNotFound = errors.New("professor not found")
+	ErrCourseNotFound    = errors.New("course not found")
+	ErrCriterionNotFound = errors.New("criterion not found")
+
+	ErrCriterionInactive = errors.New("criterion is inactive")
+
+	ErrDuplicateCriterion = errors.New(
+		"criterion cannot appear more than once in an evaluation",
+	)
+
 	ErrDuplicateEvaluation = errors.New(
 		"student has already evaluated this professor for this course, academic year and period",
 	)
@@ -27,8 +36,11 @@ var (
 
 type EvaluationRepository interface {
 	Create(evaluation Evaluation) (*Evaluation, error)
+
 	GetAll() ([]Evaluation, error)
+
 	GetByID(id int) (*Evaluation, error)
+
 	Exists(
 		studentID int,
 		professorID int,
@@ -36,6 +48,16 @@ type EvaluationRepository interface {
 		academicYear string,
 		period string,
 	) (bool, error)
+
+	// Vérification de l'existence des données liées.
+	ProfessorExists(professorID int) (bool, error)
+
+	CourseExists(courseID int) (bool, error)
+
+	CriterionExists(criterionID int) (bool, error)
+
+	CriterionIsActive(criterionID int) (bool, error)
+
 	Delete(id int) error
 }
 
@@ -50,35 +72,53 @@ func NewService(repository EvaluationRepository) *Service {
 }
 
 // Create crée une nouvelle évaluation après validation
-// des données reçues et des règles métier de base.
+// des données et des principales règles métier.
 func (s *Service) Create(
 	studentID int,
 	request CreateEvaluationRequest,
 ) (*Evaluation, error) {
 
 	// --------------------------------------------------
-	// Validation de l'étudiant
+	// 1. Validation de l'étudiant
 	// --------------------------------------------------
 	if studentID <= 0 {
 		return nil, ErrInvalidStudentID
 	}
 
 	// --------------------------------------------------
-	// Validation du professeur
+	// 2. Validation du professeur
 	// --------------------------------------------------
 	if request.ProfessorID <= 0 {
 		return nil, ErrInvalidProfessorID
 	}
 
+	professorExists, err := s.repository.ProfessorExists(request.ProfessorID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !professorExists {
+		return nil, ErrProfessorNotFound
+	}
+
 	// --------------------------------------------------
-	// Validation du cours
+	// 3. Validation du cours
 	// --------------------------------------------------
 	if request.CourseID <= 0 {
 		return nil, ErrInvalidCourseID
 	}
 
+	courseExists, err := s.repository.CourseExists(request.CourseID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !courseExists {
+		return nil, ErrCourseNotFound
+	}
+
 	// --------------------------------------------------
-	// Validation de l'année académique
+	// 4. Validation de l'année académique
 	// --------------------------------------------------
 	request.AcademicYear = strings.TrimSpace(request.AcademicYear)
 
@@ -87,7 +127,7 @@ func (s *Service) Create(
 	}
 
 	// --------------------------------------------------
-	// Validation de la période
+	// 5. Validation de la période
 	// --------------------------------------------------
 	request.Period = strings.TrimSpace(request.Period)
 
@@ -96,28 +136,64 @@ func (s *Service) Create(
 	}
 
 	// --------------------------------------------------
-	// Validation des réponses
+	// 6. Validation des réponses
 	// --------------------------------------------------
 	if len(request.Answers) == 0 {
 		return nil, ErrAnswersRequired
 	}
 
-	// Permet de détecter deux fois le même critère.
+	// Permet d'empêcher le même critère plusieurs fois.
 	criteria := make(map[int]struct{}, len(request.Answers))
 
 	for _, answer := range request.Answers {
 
-		// Vérification du critère.
+		// ----------------------------------------------
+		// Validation du CriterionID
+		// ----------------------------------------------
 		if answer.CriterionID <= 0 {
 			return nil, ErrInvalidCriterionID
 		}
 
-		// Vérification de la note.
+		// ----------------------------------------------
+		// Vérification de l'existence du critère
+		// ----------------------------------------------
+		criterionExists, err := s.repository.CriterionExists(
+			answer.CriterionID,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if !criterionExists {
+			return nil, ErrCriterionNotFound
+		}
+
+		// ----------------------------------------------
+		// Vérification que le critère est actif
+		// ----------------------------------------------
+		criterionActive, err := s.repository.CriterionIsActive(
+			answer.CriterionID,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if !criterionActive {
+			return nil, ErrCriterionInactive
+		}
+
+		// ----------------------------------------------
+		// Validation de la note
+		// ----------------------------------------------
 		if answer.Score < 1 || answer.Score > 5 {
 			return nil, ErrInvalidScore
 		}
 
-		// Vérification des critères en double.
+		// ----------------------------------------------
+		// Détection des critères en double
+		// ----------------------------------------------
 		if _, exists := criteria[answer.CriterionID]; exists {
 			return nil, ErrDuplicateCriterion
 		}
@@ -126,7 +202,7 @@ func (s *Service) Create(
 	}
 
 	// --------------------------------------------------
-	// Vérification d'une éventuelle évaluation existante
+	// 7. Vérification d'une évaluation existante
 	// --------------------------------------------------
 	exists, err := s.repository.Exists(
 		studentID,
@@ -145,7 +221,7 @@ func (s *Service) Create(
 	}
 
 	// --------------------------------------------------
-	// Transformation DTO -> Model
+	// 8. Transformation DTO -> Model
 	// --------------------------------------------------
 	answers := make([]EvaluationAnswer, 0, len(request.Answers))
 
@@ -157,7 +233,7 @@ func (s *Service) Create(
 	}
 
 	// --------------------------------------------------
-	// Création de l'évaluation
+	// 9. Création de l'évaluation
 	// --------------------------------------------------
 	evaluation := Evaluation{
 		StudentID:    studentID,
@@ -179,6 +255,7 @@ func (s *Service) GetAll() ([]Evaluation, error) {
 
 // GetByID retourne une évaluation par son ID.
 func (s *Service) GetByID(id int) (*Evaluation, error) {
+
 	if id <= 0 {
 		return nil, ErrInvalidEvaluationID
 	}
@@ -188,6 +265,7 @@ func (s *Service) GetByID(id int) (*Evaluation, error) {
 
 // Delete supprime une évaluation.
 func (s *Service) Delete(id int) error {
+
 	if id <= 0 {
 		return ErrInvalidEvaluationID
 	}

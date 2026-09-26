@@ -77,8 +77,6 @@ REG_BODY=$(echo "$REG_RESP" | sed '$d')
 echo "status: $REG_STATUS"
 echo "$REG_BODY" | jq .
 
-# 201 = nouvel utilisateur créé
-# 400 = utilisateur probablement déjà existant
 if [[ "$REG_STATUS" != "201" && "$REG_STATUS" != "400" ]]; then
     echo "Register failed with status $REG_STATUS" >&2
     exit 1
@@ -124,7 +122,8 @@ fi
 echo
 echo "== 4. Extract JWT =="
 
-TOKEN=$(echo "$LOGIN_BODY" | jq -r '.data.access_token // .access_token // empty')
+TOKEN=$(echo "$LOGIN_BODY" | jq -r \
+    '.data.access_token // .access_token // empty')
 
 if [[ -z "$TOKEN" ]]; then
     echo "No access token returned" >&2
@@ -132,6 +131,8 @@ if [[ -z "$TOKEN" ]]; then
 fi
 
 echo "JWT successfully received"
+
+AUTH_HEADER="Authorization: Bearer $TOKEN"
 
 # ============================================================
 # 5. Protected endpoint
@@ -141,7 +142,7 @@ echo
 echo "== 5. Protected endpoint =="
 
 PROT_RESP=$(curl -sS -w "\n%{http_code}" \
-    -H "Authorization: Bearer $TOKEN" \
+    -H "$AUTH_HEADER" \
     "$BASE/professors")
 
 PSTATUS=$(echo "$PROT_RESP" | tail -n1)
@@ -199,10 +200,216 @@ if [[ "$NO_TOKEN_STATUS" != "401" ]]; then
 fi
 
 # ============================================================
+# 8. Get professors
+# ============================================================
+
+echo
+echo "== 8. Get professors =="
+
+PROF_RESP=$(curl -sS -w "\n%{http_code}" \
+    -H "$AUTH_HEADER" \
+    "$BASE/professors")
+
+PROF_STATUS=$(echo "$PROF_RESP" | tail -n1)
+PROF_BODY=$(echo "$PROF_RESP" | sed '$d')
+
+echo "status: $PROF_STATUS"
+echo "$PROF_BODY" | jq .
+
+if [[ "$PROF_STATUS" != "200" ]]; then
+    echo "Get professors failed" >&2
+    exit 1
+fi
+
+PROFESSOR_ID=$(echo "$PROF_BODY" | jq -r '
+    .professors[0].id //
+    .data[0].id //
+    empty
+')
+
+if [[ -z "$PROFESSOR_ID" ]]; then
+    echo "No professor available for evaluation test" >&2
+    exit 1
+fi
+
+echo "Professor ID: $PROFESSOR_ID"
+
+# ============================================================
+# 9. Get courses
+# ============================================================
+
+echo
+echo "== 9. Get courses =="
+
+COURSE_RESP=$(curl -sS -w "\n%{http_code}" \
+    -H "$AUTH_HEADER" \
+    "$BASE/courses")
+
+COURSE_STATUS=$(echo "$COURSE_RESP" | tail -n1)
+COURSE_BODY=$(echo "$COURSE_RESP" | sed '$d')
+
+echo "status: $COURSE_STATUS"
+echo "$COURSE_BODY" | jq .
+
+if [[ "$COURSE_STATUS" != "200" ]]; then
+    echo "Get courses failed" >&2
+    exit 1
+fi
+
+COURSE_ID=$(echo "$COURSE_BODY" | jq -r '
+    .courses[0].id //
+    .data[0].id //
+    empty
+')
+
+if [[ -z "$COURSE_ID" ]]; then
+    echo "No course available for evaluation test" >&2
+    exit 1
+fi
+
+echo "Course ID: $COURSE_ID"
+
+# ============================================================
+# 10. Get active criteria
+# ============================================================
+
+echo
+echo "== 10. Get active criteria =="
+
+CRITERIA_RESP=$(curl -sS -w "\n%{http_code}" \
+    -H "$AUTH_HEADER" \
+    "$BASE/criteria/active")
+
+CRITERIA_STATUS=$(echo "$CRITERIA_RESP" | tail -n1)
+CRITERIA_BODY=$(echo "$CRITERIA_RESP" | sed '$d')
+
+echo "status: $CRITERIA_STATUS"
+echo "$CRITERIA_BODY" | jq .
+
+if [[ "$CRITERIA_STATUS" != "200" ]]; then
+    echo "Get active criteria failed" >&2
+    exit 1
+fi
+
+CRITERION_ID=$(echo "$CRITERIA_BODY" | jq -r '
+    .criteria[0].id //
+    .data[0].id //
+    empty
+')
+
+if [[ -z "$CRITERION_ID" ]]; then
+    echo "No active criterion available for evaluation test" >&2
+    exit 1
+fi
+
+echo "Criterion ID: $CRITERION_ID"
+
+# ============================================================
+# 11. Create evaluation
+# ============================================================
+
+echo
+echo "== 11. Create evaluation =="
+
+EVALUATION_PAYLOAD=$(jq -n \
+    --argjson professor_id "$PROFESSOR_ID" \
+    --argjson course_id "$COURSE_ID" \
+    --argjson criterion_id "$CRITERION_ID" \
+    '{
+        professor_id: $professor_id,
+        course_id: $course_id,
+        academic_year: "2025-2026",
+        period: "E2E",
+        answers: [
+            {
+                criterion_id: $criterion_id,
+                score: 5
+            }
+        ]
+    }'
+)
+
+echo "$EVALUATION_PAYLOAD" | jq .
+
+EVALUATION_RESP=$(curl -sS -w "\n%{http_code}" \
+    -X POST \
+    "$BASE/evaluations" \
+    -H "$AUTH_HEADER" \
+    -H "Content-Type: application/json" \
+    -d "$EVALUATION_PAYLOAD")
+
+EVALUATION_STATUS=$(echo "$EVALUATION_RESP" | tail -n1)
+EVALUATION_BODY=$(echo "$EVALUATION_RESP" | sed '$d')
+
+echo "status: $EVALUATION_STATUS"
+echo "$EVALUATION_BODY" | jq .
+
+if [[ "$EVALUATION_STATUS" != "201" ]]; then
+    echo "Create evaluation failed" >&2
+    exit 1
+fi
+
+EVALUATION_ID=$(echo "$EVALUATION_BODY" | jq -r '.id // empty')
+
+if [[ -z "$EVALUATION_ID" ]]; then
+    echo "No evaluation ID returned" >&2
+    exit 1
+fi
+
+echo "Evaluation ID: $EVALUATION_ID"
+
+# ============================================================
+# 12. Get evaluation by ID
+# ============================================================
+
+echo
+echo "== 12. Get evaluation by ID =="
+
+GET_EVALUATION_RESP=$(curl -sS -w "\n%{http_code}" \
+    -H "$AUTH_HEADER" \
+    "$BASE/evaluations/$EVALUATION_ID")
+
+GET_EVALUATION_STATUS=$(echo "$GET_EVALUATION_RESP" | tail -n1)
+GET_EVALUATION_BODY=$(echo "$GET_EVALUATION_RESP" | sed '$d')
+
+echo "status: $GET_EVALUATION_STATUS"
+echo "$GET_EVALUATION_BODY" | jq .
+
+if [[ "$GET_EVALUATION_STATUS" != "200" ]]; then
+    echo "Get evaluation failed" >&2
+    exit 1
+fi
+
+# ============================================================
+# 13. Duplicate evaluation
+# ============================================================
+
+echo
+echo "== 13. Duplicate evaluation test =="
+
+DUPLICATE_RESP=$(curl -sS -w "\n%{http_code}" \
+    -X POST \
+    "$BASE/evaluations" \
+    -H "$AUTH_HEADER" \
+    -H "Content-Type: application/json" \
+    -d "$EVALUATION_PAYLOAD")
+
+DUPLICATE_STATUS=$(echo "$DUPLICATE_RESP" | tail -n1)
+DUPLICATE_BODY=$(echo "$DUPLICATE_RESP" | sed '$d')
+
+echo "status: $DUPLICATE_STATUS"
+echo "$DUPLICATE_BODY" | jq .
+
+if [[ "$DUPLICATE_STATUS" != "409" ]]; then
+    echo "Duplicate evaluation test failed" >&2
+    exit 1
+fi
+
+# ============================================================
 # SUCCESS
 # ============================================================
 
 echo
 echo "========================================"
-echo " E2E TESTS PASSED"
+echo " ALL E2E TESTS PASSED"
 echo "========================================"

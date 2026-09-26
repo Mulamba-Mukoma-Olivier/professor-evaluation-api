@@ -23,11 +23,10 @@ func NewRepository(db *gorm.DB) *Repository {
 func (r *Repository) Create(evaluation Evaluation) (*Evaluation, error) {
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 
-		// On sauvegarde temporairement les réponses.
+		// Sauvegarde temporaire des réponses.
 		answers := evaluation.Answers
 
-		// On évite que GORM crée automatiquement les réponses
-		// lors de la création de l'évaluation.
+		// Évite que GORM crée automatiquement les réponses.
 		evaluation.Answers = nil
 
 		// Création de l'évaluation.
@@ -44,7 +43,7 @@ func (r *Repository) Create(evaluation Evaluation) (*Evaluation, error) {
 			}
 		}
 
-		// On remet les réponses dans l'objet retourné.
+		// Remet les réponses dans l'objet.
 		evaluation.Answers = answers
 
 		return nil
@@ -110,6 +109,7 @@ func (r *Repository) Exists(
 	academicYear string,
 	period string,
 ) (bool, error) {
+
 	var count int64
 
 	result := r.db.
@@ -131,9 +131,74 @@ func (r *Repository) Exists(
 	return count > 0, nil
 }
 
+// ProfessorExists vérifie que le professeur existe.
+func (r *Repository) ProfessorExists(professorID int) (bool, error) {
+	var count int64
+
+	result := r.db.
+		Table("professors").
+		Where("id = ?", professorID).
+		Count(&count)
+
+	if result.Error != nil {
+		return false, result.Error
+	}
+
+	return count > 0, nil
+}
+
+// CourseExists vérifie que le cours existe.
+func (r *Repository) CourseExists(courseID int) (bool, error) {
+	var count int64
+
+	result := r.db.
+		Table("courses").
+		Where("id = ?", courseID).
+		Count(&count)
+
+	if result.Error != nil {
+		return false, result.Error
+	}
+
+	return count > 0, nil
+}
+
+// CriterionExists vérifie que le critère existe.
+func (r *Repository) CriterionExists(criterionID int) (bool, error) {
+	var count int64
+
+	result := r.db.
+		Table("criterions").
+		Where("id = ?", criterionID).
+		Count(&count)
+
+	if result.Error != nil {
+		return false, result.Error
+	}
+
+	return count > 0, nil
+}
+
+// CriterionIsActive vérifie que le critère est actif.
+func (r *Repository) CriterionIsActive(criterionID int) (bool, error) {
+	var active bool
+
+	result := r.db.
+		Table("criterions").
+		Select("active").
+		Where("id = ?", criterionID).
+		Scan(&active)
+
+	if result.Error != nil {
+		return false, result.Error
+	}
+
+	return active, nil
+}
+
 // Delete supprime une évaluation.
-// Les réponses associées seront également supprimées
-// grâce à la contrainte OnDelete:CASCADE du modèle.
+// Les réponses associées sont supprimées grâce
+// à la contrainte OnDelete:CASCADE du modèle.
 func (r *Repository) Delete(id int) error {
 	result := r.db.Delete(&Evaluation{}, id)
 
