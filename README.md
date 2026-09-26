@@ -1,45 +1,51 @@
-### Endpoints de l'API
+# Endpoints de l'API REST
 
-#### Health
+## 1. Santé de l'API
 
 * `GET /health`
 
-#### Authentification
+## 2. Authentification
 
 * `POST /auth/register`
 * `POST /auth/login`
 
-#### Professeurs
+## 3. Professeurs
 
 * `GET /professors`
 * `GET /professors/active`
+* `GET /professors/by-status`
 * `GET /professors/:id`
 * `POST /professors`
+* `PUT /professors/:id`
+* `DELETE /professors/:id`
 
-#### Cours
+## 4. Cours
 
 * `GET /courses`
 * `GET /courses/:id`
 * `POST /courses`
+* `PUT /courses/:id`
+* `DELETE /courses/:id`
 
-#### Critères
+## 5. Critères d'évaluation
 
 * `GET /criteria`
 * `GET /criteria/active`
 * `GET /criteria/:id`
 * `POST /criteria`
+* `PUT /criteria/:id`
+* `DELETE /criteria/:id`
 
-#### Évaluations
+## 6. Évaluations
 
 * `GET /evaluations`
 * `GET /evaluations/:id`
 * `POST /evaluations`
-* `DELETE /evaluations/:id`
 
-#### Résultats
+## 7. Résultats
 
 * `GET /results/professors/:professor_id`
 
-#### Éligibilité
+## 8. Éligibilité
 
 * `GET /eligibility/:student_id`

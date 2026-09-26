@@ -22,6 +22,7 @@ import (
 )
 
 func main() {
+
 	// =========================================================
 	// 1. Charger les variables d'environnement
 	// =========================================================
@@ -31,19 +32,10 @@ func main() {
 	}
 
 	// =========================================================
-	// 2. Configuration PostgreSQL
+	// 2. Connexion à SQLite
 	// =========================================================
 
-	dbConfig := database.Config{
-		Host:     getEnv("DB_HOST", "localhost"),
-		Port:     getEnv("DB_PORT", "5432"),
-		User:     getEnv("DB_USER", "postgres"),
-		Password: getEnv("DB_PASSWORD", "postgres"),
-		Name:     getEnv("DB_NAME", "professor_evaluation"),
-		SSLMode:  getEnv("DB_SSLMODE", "disable"),
-	}
-
-	db, err := database.NewPostgresDB(dbConfig)
+	db, err := database.NewSQLiteDB()
 	if err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}
@@ -55,13 +47,25 @@ func main() {
 
 	defer sqlDB.Close()
 
-	log.Println("Database connected successfully")
+	log.Println("SQLite database connected successfully")
 
 	// =========================================================
-	// 3. Database migrations
+	// 3. Database migration
 	// =========================================================
 
-	if err := database.Migrate(db, dbConfig); err != nil {
+	if err := database.Migrate(
+		db,
+
+		&auth.User{},
+		&professors.Professor{},
+		&courses.Course{},
+		&criteria.Criterion{},
+		&eligibility.Eligibility{},
+
+		// Évaluation
+		&evaluations.Evaluation{},
+		&evaluations.EvaluationAnswer{},
+	); err != nil {
 		log.Fatalf("Database migration failed: %v", err)
 	}
 
@@ -98,33 +102,19 @@ func main() {
 	// 6. Services
 	// =========================================================
 
-	authService := auth.NewService(
-		userRepository,
-	)
+	authService := auth.NewService(userRepository)
 
-	professorService := professors.NewService(
-		professorRepository,
-	)
+	professorService := professors.NewService(professorRepository)
 
-	courseService := courses.NewService(
-		courseRepository,
-	)
+	courseService := courses.NewService(courseRepository)
 
-	criteriaService := criteria.NewService(
-		criteriaRepository,
-	)
+	criteriaService := criteria.NewService(criteriaRepository)
 
-	evaluationService := evaluations.NewService(
-		evaluationRepository,
-	)
+	evaluationService := evaluations.NewService(evaluationRepository)
 
-	eligibilityService := eligibility.NewService(
-		eligibilityRepository,
-	)
+	eligibilityService := eligibility.NewService(eligibilityRepository)
 
-	resultService := results.NewService(
-		resultRepository,
-	)
+	resultService := results.NewService(resultRepository)
 
 	// =========================================================
 	// 7. Handlers
@@ -169,7 +159,7 @@ func main() {
 			CourseHandler:    courseHandler,
 			CriteriaHandler:  criteriaHandler,
 			Eligibility:      eligibilityHandler,
-			Evaluation:      evaluationHandler,
+			Evaluation:       evaluationHandler,
 			ProfessorHandler: professorHandler,
 			ResultHandler:    resultHandler,
 			JWTManager:       jwtManager,
