@@ -49,3 +49,8 @@
 ## 8. Éligibilité
 
 * `GET /eligibility/:student_id`
+* `POST /eligibility`
+* `PUT /eligibility/:student_id`
+* `DELETE /eligibility/:student_id`
+
+**Total : 29 endpoints.**
