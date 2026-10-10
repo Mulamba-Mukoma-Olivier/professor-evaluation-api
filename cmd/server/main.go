@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"log"
@@ -21,7 +21,9 @@ import (
 	"github.com/Mulamba-Mukoma-Olivier/professor-evaluation-api/routes"
 )
 
-func main() {
+// Run démarre l'API HTTP. Le point d'entrée racine l'appelle pour les
+// déploiements Go qui attendent un serveur écoutant sur PORT.
+func Run() {
 
 	// =========================================================
 	// 1. Charger les variables d'environnement

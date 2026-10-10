@@ -5,7 +5,7 @@
 Le projet contient une API Go avec son point d'entrée dans `cmd/server/main.go`. Pour le déployer :
 
 1. Poussez le dépôt vers GitHub, GitLab ou Bitbucket, puis importez-le dans Vercel.
-2. Vérifiez que le répertoire du projet est la racine du dépôt et que le Framework Preset est `Go`.
+2. Vérifiez que le répertoire du projet est la racine du dépôt. Laissez Vercel détecter le serveur Go ; ne sélectionnez pas le runtime Go Functions, qui attend des handlers sous `api/`.
 3. Ajoutez les variables d'environnement suivantes dans les réglages du projet Vercel :
 
    - `JWT_SECRET` : une clé aléatoire longue et unique.
