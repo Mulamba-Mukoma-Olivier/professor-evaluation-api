@@ -32,10 +32,10 @@ func main() {
 	}
 
 	// =========================================================
-	// 2. Connexion à SQLite
+	// 2. Connexion à la base de données
 	// =========================================================
 
-	db, err := database.NewSQLiteDB()
+	db, err := database.NewDB()
 	if err != nil {
 		log.Fatalf("Database connection failed: %v", err)
 	}
@@ -47,7 +47,7 @@ func main() {
 
 	defer sqlDB.Close()
 
-	log.Println("SQLite database connected successfully")
+	log.Println("Database connected successfully")
 
 	// =========================================================
 	// 3. Database migration

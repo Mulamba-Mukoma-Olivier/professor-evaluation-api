@@ -2,6 +2,8 @@ package routes
 
 import (
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -39,19 +41,7 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 	// =========================================================
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:5500",
-			"http://127.0.0.1:5500",
-
-			"http://localhost:3000",
-			"http://127.0.0.1:3000",
-
-			"http://localhost:3001",
-			"http://127.0.0.1:3001",
-
-			"http://localhost:3002",
-			"http://127.0.0.1:3002",
-		},
+		AllowOrigins: corsAllowedOrigins(),
 
 		AllowMethods: []string{
 			http.MethodGet,
@@ -487,4 +477,28 @@ func SetupRouter(deps RouterDependencies) *gin.Engine {
 	// =========================================================
 
 	return router
+}
+
+func corsAllowedOrigins() []string {
+	configuredOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if configuredOrigins == "" {
+		return []string{
+			"http://localhost:5500",
+			"http://127.0.0.1:5500",
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+			"http://localhost:3001",
+			"http://127.0.0.1:3001",
+			"http://localhost:3002",
+			"http://127.0.0.1:3002",
+		}
+	}
+
+	var origins []string
+	for _, origin := range strings.Split(configuredOrigins, ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
 }
